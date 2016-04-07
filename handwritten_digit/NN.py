@@ -24,6 +24,7 @@ def NN(epoch):
     return net1
 
 dataset = pd.read_csv('input/train.csv')
+dataset = dataset.iloc[:10]
 label = dataset[[0]].values.ravel()
 train = dataset.iloc[:,1:].values
 test = pd.read_csv('input/test.csv').values
@@ -33,5 +34,6 @@ train = np.array(train).reshape((-1, 1, 28, 28)).astype(np.uint8)
 test = np.array(test).reshape((-1, 1, 28, 28)).astype(np.uint8)
 net1 = NN(50)
 net1.fit(train, label)
+
 pred = net1.predict(test)
 np.savetxt('submission_nn.csv', np.c_[range(1,len(test)+1),pred], delimiter=',', header='ImageId,Label', comments='', fmt='%d')
