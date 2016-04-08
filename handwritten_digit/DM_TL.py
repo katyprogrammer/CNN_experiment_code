@@ -30,13 +30,13 @@ def get_classes(classes, split_ratio, num):
 
 def NN(epoch,outNum):
     l = InputLayer(name='input', shape=(None,1,28,28*2))
-    l = DenseLayer(l, num_units=100, nonlinearity=None)
-    l = DenseLayer(l, num_units=100, nonlinearity=None)
-    l = DenseLayer(l, num_units=100, nonlinearity=None)
+    l = DenseLayer(l, num_units=500, nonlinearity=None)
+    l = DenseLayer(l, num_units=500, nonlinearity=None)
+    l = DenseLayer(l, num_units=500, nonlinearity=None)
     l = DenseLayer(l, num_units=outNum, nonlinearity=lasagne.nonlinearities.softmax)
     net = NeuralNet(l,
                     update = nesterov_momentum,
-                    update_learning_rate = 1e-4,
+                    update_learning_rate = 1e-5,
                     update_momentum = 0.9,
                     max_epochs = epoch,
                     verbose = 1
@@ -66,7 +66,7 @@ def calc_shared(net):
         last_layer = np.array(cur_shared)
     print(shared)
 
-def gen_data(A, B, split_ratio, num):
+def gen_data(A, B, split_ratio, num, filename):
     A_train, A_test = get_classes(A, SPLIT_RATIO, NUM)
     B_train, B_test = get_classes(B, SPLIT_RATIO, NUM)
     ORIGIN_HEADER = ['pixel{0}'.format(x) for x in range(28*28)]
@@ -86,35 +86,45 @@ def gen_data(A, B, split_ratio, num):
             df = df_train[df_train['A_label']==a]
         else:
             df = df.append(df_train[df_train['A_label']==a])
-    df.to_csv('train.csv')
-    
+    df.to_csv(filename)
+
+def run(filename):
+    df_train = pd.read_csv(filename)
+    label = []
+    for idx, row in df_train.iterrows():
+        label += [int('{0}{1}'.format(row['A_label'],row['B_label']))]
+
+    df_train['label'] = label
+    df_train.to_csv('combined_{0}'.format(filename))
+    HEADER = ['label']
+    HEADER += ['A_pixel{0}'.format(x) for x in range(28*28)]
+    HEADER += ['B_pixel{0}'.format(x) for x in range(28*28)]
+    train = df_train[HEADER[1:]].values
+    train = np.array(train).reshape((-1,1,28,28*2)).astype(np.uint8)
+    label = np.array(label).astype(np.uint8)
+    label_dict = {}
+    for x in set(label):
+        if x not in label_dict.keys():
+            label_dict[x] = len(label_dict)
+    encoded_label = np.array([label_dict[label[i]] for i in range(len(label))]).astype(np.uint8)
+    net = NN(30, len(label_dict))
+    net.fit(train, encoded_label)
+    calc_shared(net)
+
 SPLIT_RATIO = 0.9
-NUM = 5
-A, B = [1,7,0], [0,1,9]
-# gen_data(A,B,SPLIT_RATIO,NUM)
+NUM = 50
 
+fname = 'low.csv'
+A, B = [1,7], [0,9]
+# gen_data(A,B,SPLIT_RATIO,NUM,fname)
+run(fname)
 
-df_train = pd.read_csv('train.csv')
-label = []
-for idx, row in df_train.iterrows():
-    label += [int('{0}{1}'.format(row['A_label'],row['B_label']))]
+fname = 'mid.csv'
+A, B = [1,0], [7,9]
+# gen_data(A,B,SPLIT_RATIO,NUM,fname)
+run(fname)
 
-
-df_train['label'] = label
-df_train.to_csv('combined_train.csv')
-HEADER = ['label']
-HEADER += ['A_pixel{0}'.format(x) for x in range(28*28)]
-HEADER += ['B_pixel{0}'.format(x) for x in range(28*28)]
-train = df_train[HEADER[1:]].values
-train = np.array(train).reshape((-1,1,28,28*2)).astype(np.uint8)
-label = np.array(label).astype(np.uint8)
-label_dict = {}
-for x in set(label):
-    if x not in label_dict.keys():
-        label_dict[x] = len(label_dict)
-
-
-encoded_label = np.array([label_dict[label[i]] for i in range(len(label))]).astype(np.uint8)
-net = NN(30, len(label_dict))
-net.fit(train, encoded_label)
-calc_shared(net)
+# fname = 'high.csv'
+# A, B = [1,7,0], [0,1,9]
+# gen_data(A,B,SPLIT_RATIO,NUM,fname)
+# run(fname)
