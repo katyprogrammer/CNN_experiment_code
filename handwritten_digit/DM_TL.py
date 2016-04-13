@@ -2,10 +2,12 @@ import pandas as pd
 import numpy as np
 import lasagne
 import theano.tensor as T
+import matplotlib.pyplot as plt
 from lasagne.layers import InputLayer, DenseLayer
 from lasagne.updates import nesterov_momentum
 from nolearn.lasagne import NeuralNet
 from nolearn.lasagne import visualize
+from sklearn.metrics import accuracy_score
 import os
 
 def read_and_split(filepath, split_ratio, num):
@@ -36,12 +38,17 @@ def multilabel_objective(predictions, targets):
     return -T.sum(targets*T.log(pred) + (one-targets)*T.log(one-pred), axis=1) # cross-entropy
 
 
+def control_layer_num(n, l):
+    tl = l
+    for i in range(n):
+        tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
+    return tl
+
+
 def NN(epoch):
     l = InputLayer(name='input', shape=(None,1,28,28*2))
-    l = DenseLayer(l, num_units=100, nonlinearity=None)
-    l = DenseLayer(l, num_units=100, nonlinearity=None)
-    l = DenseLayer(l, num_units=100, nonlinearity=None)
-    l = DenseLayer(l, num_units=10, nonlinearity=lasagne.nonlinearities.softmax)
+    l = control_layer_num(10, l)
+    l = DenseLayer(l, num_units=10, nonlinearity=lasagne.nonlinearities.sigmoid)
     net = NeuralNet(l,
                     update = nesterov_momentum,
                     update_learning_rate = 1e-5,
@@ -75,6 +82,8 @@ def calc_shared(net):
         shared += [sum(cur_shared)/neuron_num]
         last_layer = np.array(cur_shared)
     print(shared)
+    plt.plot(shared)
+    plt.show()
 
 def gen_data(A, B, split_ratio, num, filename):
     A_train, A_test = get_classes(A, SPLIT_RATIO, NUM)
@@ -115,24 +124,25 @@ def run(filename):
     train = df_train[HEADER[1:]].values
     train = np.array(train).reshape((-1,1,28,28*2)).astype(np.uint8)
     label = np.array(label).astype(np.uint8)
-    net = NN(30)
+    net = NN(100)
     net.fit(train, label)
     calc_shared(net)
 
 SPLIT_RATIO = 0.9
-NUM = 5
+NUM = 10
+HN = 100
 
 fname = 'low.csv'
 A, B = [1,7], [0,9]
 # gen_data(A,B,SPLIT_RATIO,NUM,fname)
 run(fname)
 
-# fname = 'mid.csv'
-# A, B = [1,0], [7,9]
+fname = 'mid.csv'
+A, B = [1,0], [7,9]
 # gen_data(A,B,SPLIT_RATIO,NUM,fname)
-# run(fname)
+run(fname)
 
-# fname = 'high.csv'
-# A, B = [1,7,0], [0,1,9]
+fname = 'high.csv'
+A, B = [1,7,0], [0,1,9]
 # gen_data(A,B,SPLIT_RATIO,NUM,fname)
-# run(fname)
+run(fname)
