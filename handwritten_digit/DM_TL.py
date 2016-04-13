@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import lasagne
+import theano.tensor as T
 from lasagne.layers import InputLayer, DenseLayer
 from lasagne.updates import nesterov_momentum
 from nolearn.lasagne import NeuralNet
@@ -28,18 +29,27 @@ def get_classes(classes, split_ratio, num):
     return train, test
 
 
-def NN(epoch,outNum):
+def multilabel_objective(predictions, targets):
+    epsilon = np.float32(1e-6)
+    one = np.float32(1.0)
+    pred = T.clip(predictions, epsilon, one-epsilon)
+    return -T.sum(targets*T.log(pred) + (one-targets)*T.log(one-pred), axis=1) # cross-entropy
+
+
+def NN(epoch):
     l = InputLayer(name='input', shape=(None,1,28,28*2))
-    l = DenseLayer(l, num_units=500, nonlinearity=None)
-    l = DenseLayer(l, num_units=500, nonlinearity=None)
-    l = DenseLayer(l, num_units=500, nonlinearity=None)
-    l = DenseLayer(l, num_units=outNum, nonlinearity=lasagne.nonlinearities.softmax)
+    l = DenseLayer(l, num_units=100, nonlinearity=None)
+    l = DenseLayer(l, num_units=100, nonlinearity=None)
+    l = DenseLayer(l, num_units=100, nonlinearity=None)
+    l = DenseLayer(l, num_units=10, nonlinearity=lasagne.nonlinearities.softmax)
     net = NeuralNet(l,
                     update = nesterov_momentum,
                     update_learning_rate = 1e-5,
                     update_momentum = 0.9,
                     max_epochs = epoch,
-                    verbose = 1
+                    verbose = 1,
+                    regression = True,
+                    objective_loss_function = multilabel_objective
     )
     return net
 
@@ -92,7 +102,10 @@ def run(filename):
     df_train = pd.read_csv(filename)
     label = []
     for idx, row in df_train.iterrows():
-        label += [int('{0}{1}'.format(row['A_label'],row['B_label']))]
+        l = np.zeros(10)
+        l[int(row['A_label'])] = 1
+        l[int(row['B_label'])] = 1
+        label += [l]
 
     df_train['label'] = label
     df_train.to_csv('combined_{0}'.format(filename))
@@ -102,27 +115,22 @@ def run(filename):
     train = df_train[HEADER[1:]].values
     train = np.array(train).reshape((-1,1,28,28*2)).astype(np.uint8)
     label = np.array(label).astype(np.uint8)
-    label_dict = {}
-    for x in set(label):
-        if x not in label_dict.keys():
-            label_dict[x] = len(label_dict)
-    encoded_label = np.array([label_dict[label[i]] for i in range(len(label))]).astype(np.uint8)
-    net = NN(30, len(label_dict))
-    net.fit(train, encoded_label)
+    net = NN(30)
+    net.fit(train, label)
     calc_shared(net)
 
 SPLIT_RATIO = 0.9
-NUM = 50
+NUM = 5
 
 fname = 'low.csv'
 A, B = [1,7], [0,9]
 # gen_data(A,B,SPLIT_RATIO,NUM,fname)
 run(fname)
 
-fname = 'mid.csv'
-A, B = [1,0], [7,9]
+# fname = 'mid.csv'
+# A, B = [1,0], [7,9]
 # gen_data(A,B,SPLIT_RATIO,NUM,fname)
-run(fname)
+# run(fname)
 
 # fname = 'high.csv'
 # A, B = [1,7,0], [0,1,9]
