@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from numpy.linalg import inv
 import lasagne
 from nolearn.lasagne import TrainSplit
 import theano.tensor as T
@@ -34,7 +35,7 @@ def multilabel_objective(predictions, targets):
     epsilon = np.float32(1e-6)
     one = np.float32(1.0)
     return -T.sum(targets*T.log(predictions) + (one-targets)*T.log(one-predictions), axis=1)
-
+    # return T.sum(T.neq(T.argmax(predictions[:10]), targets[:10])) + T.sum(T.neq(T.argmax(predictions[10:]), targets[10:])) # zero-one loss [bad performance]
 
 def control_layer_num(n, l):
     tl = l
@@ -59,34 +60,53 @@ def NN(epoch):
     )
     return net
 
+def importance(W, last_layer, init):
+    cur_shared = []
+    (ni, no) = W.shape
+    for o in range(no):
+        abs_weight = np.array([abs(W[i][o]) for i in range(ni)])
+        norm = sum(abs_weight)
+        abs_weight /= norm
+        if last_layer is None:
+            last_layer = init
+        cur_shared += [np.dot(abs_weight, last_layer)]
+    shared = sum(cur_shared)/no
+    return (shared, cur_shared)
 
-def calc_shared(net):
-    shared_all_layer = []
-    params = net.get_all_params_values()
-    mid_layers = params.keys()[1:-1]
-    shared = []
-    last_layer = None
-    for layer in mid_layers:
-        cur_shared = []
-        neuron_num = len(params[layer][1])
-        x_num = len(params[layer][0])
-        for neuron in range(neuron_num):
-            abs_weight = np.array([abs(params[layer][0][i][neuron]) for i in range(x_num)])
-            norm = sum(abs_weight)
-            abs_weight /= norm
-            if last_layer is None:
-                last_layer = [1 for i in range(28*28)]
-                last_layer += [0 for i in range(28*28)]
-                last_layer = np.array(last_layer)
-            cur_shared += [np.dot(abs_weight, last_layer)]
-        shared += [sum(cur_shared)/neuron_num]
-        last_layer = np.array(cur_shared)
-        shared_all_layer.append(cur_shared)
-    # calc change
+def select_mono(shared):
     change = [(shared[i]-shared[i-1]) for i in range(1,len(shared))]
     if sum(change) > 0:
         shared = 1-np.array(shared)
-    return shared_all_layer, shared
+    return shared
+    
+def calc_shared(net):
+    shared_all_layer_I, shared_all_layer_O = [], []
+    params = net.get_all_params_values()
+    mid_layers = params.keys()[1:]
+    shared_I, shared_O = [], []
+    last_layer_I, last_layer_O = None, None
+    init_I = np.array([1 for i in range(28*28)] + [0 for i in range(28*28)])
+    init_O = np.array([1 for i in range(10)] + [0 for i in range(10)])
+    # forward
+    for layer in mid_layers:
+        W = np.array(params[layer][0][:][:]) # input by output
+        si, cur_shared = importance(W, last_layer_I, init_I)
+        shared_I += [si]
+        last_layer_I = np.array(cur_shared)
+        shared_all_layer_I.append(cur_shared)
+    mid_layers.reverse()
+    # backward
+    for layer in mid_layers:
+        W = np.array(params[layer][0][:][:])
+        trW = W.transpose()
+        invW = np.dot(trW, inv(np.dot(W, trW))) # output by input
+        so, cur_shared = importance(invW, last_layer_O, init_O)
+        shared_O += [so]
+        last_layer_O = np.array(cur_shared)
+        shared_all_layer_O.append(cur_shared)
+    # select monotonically increased ones
+    shared_I, shared_O = select_mono(shared_I), select_mono(shared_O)
+    return shared_all_layer_I, shared_all_layer_O[::-1], shared_I, shared_O[::-1]
 
 def proc(Adf, Bdf, A, B):
     ORIGIN_HEADER = ['pixel{0}'.format(x) for x in range(28*28)]
@@ -155,7 +175,7 @@ def run(filename):
     while True:
         net = NN(EPOCH)
         net.fit(train, train_label)
-        shared_all_layer, shared = calc_shared(net)
+        shared_all_layer_I, shared_all_layer_O, shared_I, shared_O = calc_shared(net)
         pred = net.predict(test)
         n = len(pred)
         acc = 0
@@ -167,9 +187,15 @@ def run(filename):
         print('accuracy={0}'.format(accuracy))
         if accuracy > 0.7:
             break
-    plt.boxplot(shared_all_layer)
-    plt.title('[{0}] acc={3}%\n{1} test instances, {2} correct'.format(filename, n,acc,100*accuracy))
-    plt.savefig('n={3},l={1},pn={2},{0}'.format(filename,LN,HN,NUM))
+    # plot shared_input
+    plt.boxplot(shared_all_layer_I)
+    plt.title('[{0} forward] acc={3}%\n{1} test instances, {2} correct'.format(filename, n,acc,100*accuracy))
+    plt.savefig('F_n={3},l={1},pn={2},{0}'.format(filename,LN,HN,NUM))
+    plt.hold(False)
+    # plot shared_output
+    plt.boxplot(shared_all_layer_O)
+    plt.title('[{0} backward] acc={3}%\n{1} test instances, {2} correct'.format(filename, n,acc,100*accuracy))
+    plt.savefig('B_n={3},l={1},pn={2},{0}'.format(filename,LN,HN,NUM))
     plt.hold(False)
     return net
 
