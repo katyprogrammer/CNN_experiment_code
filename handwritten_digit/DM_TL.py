@@ -136,9 +136,13 @@ def calc_shared(params):
 def custom_regularizor(layers):
     params = [x.get_params() for x in layers.values()]
     SI, SO, si, so = calc_shared(params)
+    SI = np.array([np.amax(x)-np.amin(x) for x in SI])
+    SO = np.array([np.amax(x)-np.amax(x) for x in SO])
+    # SI = np.array([np.var(x) for x in SI])
+    # SO = np.array([np.var(x) for x in SO])
     L = np.array(range(1,len(layers)))
     IL = len(layers)-L+1
-    reg = -(dot(si,IL)+dot(so, L))
+    reg = -(dot(SI,np.exp(IL))+dot(SO, np.exp(L)))
     return np.exp(reg)*LAMBDA
 
 def control_layer_num(n, l):
@@ -259,9 +263,9 @@ def run(filename):
 
 SPLIT_RATIO = 0.9
 NUM = 10
-LN = 30
-HN = 30
-LAMBDA = 2
+LN = 10
+HN = 50
+LAMBDA = 10
 EPOCH = 300
 
 fname = 'low'
