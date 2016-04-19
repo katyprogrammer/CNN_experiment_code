@@ -262,7 +262,7 @@ NUM = 10
 LN = 30
 HN = 30
 LAMBDA = 2
-EPOCH = 100
+EPOCH = 300
 
 fname = 'low'
 A, B = [1,7,4], [0,9,6]
