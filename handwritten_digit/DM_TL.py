@@ -7,9 +7,11 @@ import theano.tensor as T
 import matplotlib.pyplot as plt
 from lasagne.layers import InputLayer, DenseLayer
 from lasagne.updates import nesterov_momentum
-from nolearn.lasagne import NeuralNet
 from nolearn.lasagne import visualize
 import os
+from NeuralNet import NeuralNet
+from theano.tensor import dot, inv
+
 
 def read_and_split(filepath, split_ratio, num):
     df = pd.read_csv(filepath)
@@ -35,7 +37,109 @@ def multilabel_objective(predictions, targets):
     epsilon = np.float32(1e-6)
     one = np.float32(1.0)
     return -T.sum(targets*T.log(predictions) + (one-targets)*T.log(one-predictions), axis=1)
-    # return T.sum(T.neq(T.argmax(predictions[:10]), targets[:10])) + T.sum(T.neq(T.argmax(predictions[10:]), targets[10:])) # zero-one loss [bad performance]
+
+def importance(W, last_layer, init):
+    cur_shared = []
+    (ni, no) = W.shape
+    for o in range(no):
+        abs_weight = abs(W[:,o])
+        norm = sum(abs_weight)
+        abs_weight = abs_weight / norm
+        if last_layer is None:
+            last_layer = init
+        cur_shared += [np.dot(abs_weight, last_layer)]
+    shared = sum(cur_shared)/no
+    return (shared, cur_shared)
+
+def select_mono(shared):
+    change = [(shared[i]-shared[i-1]) for i in range(1,len(shared))]
+    if sum(change) > 0:
+        shared = 1-np.array(shared)
+    return shared
+
+def importance_F(W, last_layer, init):
+    cur_shared = []
+    (ni, no) = W.shape
+    for o in range(no):
+        abs_weight = np.array([abs(W[i][o]) for i in range(ni)])
+        norm = sum(abs_weight)
+        abs_weight /= norm
+        if last_layer is None:
+            last_layer = init
+        cur_shared += [np.dot(abs_weight, last_layer)]
+    shared = sum(cur_shared)/no
+    return (shared, cur_shared)
+def select_mono_F(shared):
+    change = [(shared[i]-shared[i-1]) for i in range(1,len(shared))]
+    if sum(change) > 0:
+        shared = 1-np.array(shared)
+    return shared
+def calc_shared_F(net):
+    shared_all_layer_I, shared_all_layer_O = [], []
+    params = net.get_all_params_values()
+    mid_layers = params.keys()[1:]
+    shared_I, shared_O = [], []
+    last_layer_I, last_layer_O = None, None
+    init_I = np.array([1 for i in range(28*28)] + [0 for i in range(28*28)])
+    init_O = np.array([1 for i in range(10)] + [0 for i in range(10)])
+    # forward
+    for layer in mid_layers:
+        W = np.array(params[layer][0][:][:]) # input by output
+        si, cur_shared = importance_F(W, last_layer_I, init_I)
+        shared_I += [si]
+        last_layer_I = np.array(cur_shared)
+        shared_all_layer_I.append(cur_shared)
+    mid_layers.reverse()
+    # backward
+    for layer in mid_layers:
+        W = np.array(params[layer][0][:][:])
+        trW = W.transpose()
+        invW = np.dot(trW, np.linalg.inv(np.dot(W, trW))) # output by input
+        so, cur_shared = importance_F(invW, last_layer_O, init_O)
+        shared_O += [so]
+        last_layer_O = np.array(cur_shared)
+        shared_all_layer_O.append(cur_shared)
+    # select monotonically increased ones
+    shared_I, shared_O = select_mono_F(shared_I), select_mono_F(shared_O)
+    return shared_all_layer_I, shared_all_layer_O[::-1], shared_I, shared_O[::-1]
+
+
+def calc_shared(params):
+    shared_all_layer_I, shared_all_layer_O = [], []
+    mid_layers = params[1:]
+    shared_I, shared_O = [], []
+    last_layer_I, last_layer_O = None, None
+    init_I = np.array([1 for i in range(28*28)] + [0 for i in range(28*28)])
+    init_O = np.array([1 for i in range(10)] + [0 for i in range(10)])
+    Ws = []
+    # forward
+    for layer in mid_layers:
+        Ws += [layer[0].get_value()]
+        si, cur_shared = importance(Ws[-1], last_layer_I, init_I)
+        shared_I += [si]
+        last_layer_I = np.array(cur_shared)
+        shared_all_layer_I.append(cur_shared)
+    mid_layers.reverse()
+    Ws.reverse()
+    # backward
+    for l in range(len(mid_layers)):
+        W = Ws[l]
+        invW = dot(W.T, inv(dot(W, W.T)))
+        so, cur_shared = importance(invW.eval(), last_layer_O, init_O)
+        shared_O += [so]
+        last_layer_O = np.array(cur_shared)
+        shared_all_layer_O.append(cur_shared)
+    # select monotonically increased ones
+    shared_I, shared_O = select_mono(shared_I), select_mono(shared_O)
+    return shared_all_layer_I, shared_all_layer_O[::-1], shared_I, shared_O[::-1]
+
+def custom_regularizor(layers):
+    params = [x.get_params() for x in layers.values()]
+    SI, SO, si, so = calc_shared(params)
+    L = np.array(range(1,len(layers)))
+    IL = len(layers)-L+1
+    reg = -(dot(si,IL)+dot(so, L))
+    return np.exp(reg)*LAMBDA
 
 def control_layer_num(n, l):
     tl = l
@@ -56,57 +160,11 @@ def NN(epoch):
                     verbose = 1,
                     train_split = TrainSplit(eval_size=0.2),
                     regression = True,
-                    objective_loss_function = multilabel_objective
+                    objective_loss_function = multilabel_objective,
+                    custom_regularizor = custom_regularizor
     )
     return net
 
-def importance(W, last_layer, init):
-    cur_shared = []
-    (ni, no) = W.shape
-    for o in range(no):
-        abs_weight = np.array([abs(W[i][o]) for i in range(ni)])
-        norm = sum(abs_weight)
-        abs_weight /= norm
-        if last_layer is None:
-            last_layer = init
-        cur_shared += [np.dot(abs_weight, last_layer)]
-    shared = sum(cur_shared)/no
-    return (shared, cur_shared)
-
-def select_mono(shared):
-    change = [(shared[i]-shared[i-1]) for i in range(1,len(shared))]
-    if sum(change) > 0:
-        shared = 1-np.array(shared)
-    return shared
-    
-def calc_shared(net):
-    shared_all_layer_I, shared_all_layer_O = [], []
-    params = net.get_all_params_values()
-    mid_layers = params.keys()[1:]
-    shared_I, shared_O = [], []
-    last_layer_I, last_layer_O = None, None
-    init_I = np.array([1 for i in range(28*28)] + [0 for i in range(28*28)])
-    init_O = np.array([1 for i in range(10)] + [0 for i in range(10)])
-    # forward
-    for layer in mid_layers:
-        W = np.array(params[layer][0][:][:]) # input by output
-        si, cur_shared = importance(W, last_layer_I, init_I)
-        shared_I += [si]
-        last_layer_I = np.array(cur_shared)
-        shared_all_layer_I.append(cur_shared)
-    mid_layers.reverse()
-    # backward
-    for layer in mid_layers:
-        W = np.array(params[layer][0][:][:])
-        trW = W.transpose()
-        invW = np.dot(trW, inv(np.dot(W, trW))) # output by input
-        so, cur_shared = importance(invW, last_layer_O, init_O)
-        shared_O += [so]
-        last_layer_O = np.array(cur_shared)
-        shared_all_layer_O.append(cur_shared)
-    # select monotonically increased ones
-    shared_I, shared_O = select_mono(shared_I), select_mono(shared_O)
-    return shared_all_layer_I, shared_all_layer_O[::-1], shared_I, shared_O[::-1]
 
 def proc(Adf, Bdf, A, B):
     ORIGIN_HEADER = ['pixel{0}'.format(x) for x in range(28*28)]
@@ -175,7 +233,7 @@ def run(filename):
     while True:
         net = NN(EPOCH)
         net.fit(train, train_label)
-        shared_all_layer_I, shared_all_layer_O, shared_I, shared_O = calc_shared(net)
+        shared_all_layer_I, shared_all_layer_O, shared_I, shared_O = calc_shared_F(net)
         pred = net.predict(test)
         n = len(pred)
         acc = 0
@@ -203,6 +261,7 @@ SPLIT_RATIO = 0.9
 NUM = 10
 LN = 30
 HN = 30
+LAMBDA = 2
 EPOCH = 100
 
 fname = 'low'
