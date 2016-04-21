@@ -94,7 +94,7 @@ def calc_shared_F(net):
     for layer in mid_layers:
         W = np.array(params[layer][0][:][:])
         trW = W.transpose()
-        invW = np.dot(trW, np.linalg.inv(np.dot(W, trW))) # output by input
+        invW = np.dot(trW, np.linalg.pinv(np.dot(W, trW))) # output by input
         so, cur_shared = importance_F(invW, last_layer_O, init_O)
         shared_O += [so]
         last_layer_O = np.array(cur_shared)
@@ -136,10 +136,10 @@ def calc_shared(params):
 def custom_regularizor(layers):
     params = [x.get_params() for x in layers.values()]
     SI, SO, si, so = calc_shared(params)
-    SI = np.array([np.amax(x)-np.amin(x) for x in SI])
-    SO = np.array([np.amax(x)-np.amax(x) for x in SO])
-    #SI = np.array([np.var(x) for x in SI])
-    #SO = np.array([np.var(x) for x in SO])
+    #SI = np.array([np.amax(x)-np.amin(x) for x in SI])
+    #SO = np.array([np.amax(x)-np.amax(x) for x in SO])
+    SI = np.array([np.var(x) for x in SI])
+    SO = np.array([np.var(x) for x in SO])
     #L = np.array(range(1,len(layers)))
     #IL = len(layers)-L+1
     #reg = -(dot(SI,np.exp(IL))+dot(SO, np.exp(L)))
@@ -267,10 +267,10 @@ def run(filename):
 
 SPLIT_RATIO = 0.9
 NUM = 10
-LN = 20
+LN = 10
 HN = 50
 LAMBDA = 1
-ACC = 0.8
+ACC = 0.85
 EPOCH = 300
 
 fname = 'low'
