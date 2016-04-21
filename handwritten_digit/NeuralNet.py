@@ -78,6 +78,8 @@ def objective(layers,
     network_output = get_output(
         output_layer, deterministic=deterministic, **get_output_kw)
     loss = aggregate(loss_function(network_output, target))
+    print(loss)
+    
     if custom_regularizor is not None:
         loss += custom_regularizor(layers)
     if l1:
@@ -86,6 +88,7 @@ def objective(layers,
     if l2:
         loss += regularization.regularize_layer_params(
             layers.values(), regularization.l2) * l2
+    print(loss)
     return loss
 
 
@@ -388,9 +391,7 @@ class NeuralNet(BaseEstimator):
             accuracy = loss_eval
 
         all_params = self.get_all_params(trainable=True)
-        print('loss:{0}'.format(loss_train))
         grads = theano.grad(loss_train, all_params)
-        print('grad:{0}'.format(grads))
         for idx, param in enumerate(all_params):
             grad_scale = getattr(param.tag, 'grad_scale', 1)
             if grad_scale != 1:
@@ -444,118 +445,104 @@ class NeuralNet(BaseEstimator):
         return self.fit(X, y, epochs=1)
 
     def train_loop(self, X, y, epochs=None):
-        epochs = epochs or self.max_epochs
-        X_train, X_valid, y_train, y_valid = self.train_split(X, y, self)
+        bad = True
+        while bad:
+            epochs = epochs or self.max_epochs
+            X_train, X_valid, y_train, y_valid = self.train_split(X, y, self)
 
-        on_batch_finished = self.on_batch_finished
-        if not isinstance(on_batch_finished, (list, tuple)):
-            on_batch_finished = [on_batch_finished]
+            on_batch_finished = self.on_batch_finished
+            if not isinstance(on_batch_finished, (list, tuple)):
+                on_batch_finished = [on_batch_finished]
 
-        on_epoch_finished = self.on_epoch_finished
-        if not isinstance(on_epoch_finished, (list, tuple)):
-            on_epoch_finished = [on_epoch_finished]
+            on_epoch_finished = self.on_epoch_finished
+            if not isinstance(on_epoch_finished, (list, tuple)):
+                on_epoch_finished = [on_epoch_finished]
 
-        on_training_started = self.on_training_started
-        if not isinstance(on_training_started, (list, tuple)):
-            on_training_started = [on_training_started]
+            on_training_started = self.on_training_started
+            if not isinstance(on_training_started, (list, tuple)):
+                on_training_started = [on_training_started]
 
-        on_training_finished = self.on_training_finished
-        if not isinstance(on_training_finished, (list, tuple)):
-            on_training_finished = [on_training_finished]
+            on_training_finished = self.on_training_finished
+            if not isinstance(on_training_finished, (list, tuple)):
+                on_training_finished = [on_training_finished]
 
-        epoch = 0
-        best_valid_loss = (
-            min([row['valid_loss'] for row in self.train_history_]) if
-            self.train_history_ else np.inf
-            )
-        best_train_loss = (
-            min([row['train_loss'] for row in self.train_history_]) if
-            self.train_history_ else np.inf
-            )
-        for func in on_training_started:
-            func(self, self.train_history_)
+            epoch = 0
+            best_valid_loss = (min([row['valid_loss'] for row in self.train_history_]) if self.train_history_ else np.inf)
+            best_train_loss = (min([row['train_loss'] for row in self.train_history_]) if self.train_history_ else np.inf)
+            for func in on_training_started:
+                func(self, self.train_history_)
 
-        num_epochs_past = len(self.train_history_)
+            num_epochs_past = len(self.train_history_)
 
-        while epoch < epochs:
-            epoch += 1
+            while epoch < epochs:
+                epoch += 1
+                train_losses = []
+                valid_losses = []
+                valid_accuracies = []
+                custom_scores = [[] for _ in self.custom_scores] if self.custom_scores else []
+                t0 = time()
+                batch_train_sizes = []
+                for Xb, yb in self.batch_iterator_train(X_train, y_train):
+                    batch_train_loss = self.apply_batch_func(self.train_iter_, Xb, yb)
+                    train_losses.append(batch_train_loss[0])
+                    batch_train_sizes.append(len(Xb))
 
-            train_losses = []
-            valid_losses = []
-            valid_accuracies = []
-            if self.custom_scores:
-                custom_scores = [[] for _ in self.custom_scores]
-            else:
-                custom_scores = []
+                    for func in on_batch_finished:
+                        func(self, self.train_history_)
 
-            t0 = time()
+                    batch_valid_sizes = []
+                for Xb, yb in self.batch_iterator_test(X_valid, y_valid):
+                    batch_valid_loss, accuracy = self.apply_batch_func(self.eval_iter_, Xb, yb)
+                    valid_losses.append(batch_valid_loss)
+                    valid_accuracies.append(accuracy)
+                    batch_valid_sizes.append(len(Xb))
 
-            batch_train_sizes = []
-            for Xb, yb in self.batch_iterator_train(X_train, y_train):
-                batch_train_loss = self.apply_batch_func(
-                    self.train_iter_, Xb, yb)
-                train_losses.append(batch_train_loss[0])
-                batch_train_sizes.append(len(Xb))
+                    if self.custom_scores:
+                        y_prob = self.apply_batch_func(self.predict_iter_, Xb)
+                        for custom_scorer, custom_score in zip(self.custom_scores, custom_scores):
+                            custom_score.append(custom_scorer[1](yb, y_prob))
 
-                for func in on_batch_finished:
-                    func(self, self.train_history_)
+                avg_train_loss = np.average(train_losses, weights=batch_train_sizes)
+                avg_valid_loss = np.average(valid_losses, weights=batch_valid_sizes)
+                if batch_valid_sizes <= 0:
+                    epoch -= 1
+                    avg_valid_loss = np.nan
 
-            batch_valid_sizes = []
-            for Xb, yb in self.batch_iterator_test(X_valid, y_valid):
-                batch_valid_loss, accuracy = self.apply_batch_func(
-                    self.eval_iter_, Xb, yb)
-                valid_losses.append(batch_valid_loss)
-                valid_accuracies.append(accuracy)
-                batch_valid_sizes.append(len(Xb))
+                avg_valid_accuracy = np.mean(valid_accuracies)
+                if custom_scores:
+                    avg_custom_scores = np.average(custom_scores, weights=batch_valid_sizes, axis=1)
 
-                if self.custom_scores:
-                    y_prob = self.apply_batch_func(self.predict_iter_, Xb)
-                    for custom_scorer, custom_score in zip(
-                            self.custom_scores, custom_scores):
-                        custom_score.append(custom_scorer[1](yb, y_prob))
+                if avg_train_loss < best_train_loss:
+                    best_train_loss = avg_train_loss
+                if avg_valid_loss < best_valid_loss:
+                    best_valid_loss = avg_valid_loss
 
-            avg_train_loss = np.average(
-                train_losses, weights=batch_train_sizes)
-            if batch_valid_sizes:
-                avg_valid_loss = np.average(
-                    valid_losses, weights=batch_valid_sizes)
-            else:
-                epoch -= 1
-                continue
-                avg_valid_loss = np.nan
-
-            avg_valid_accuracy = np.mean(valid_accuracies)
-            if custom_scores:
-                avg_custom_scores = np.average(
-                    custom_scores, weights=batch_valid_sizes, axis=1)
-
-            if avg_train_loss < best_train_loss:
-                best_train_loss = avg_train_loss
-            if avg_valid_loss < best_valid_loss:
-                best_valid_loss = avg_valid_loss
-
-            info = {
-                'epoch': num_epochs_past + epoch,
-                'train_loss': avg_train_loss,
-                'train_loss_best': best_train_loss == avg_train_loss,
-                'valid_loss': avg_valid_loss,
-                'valid_loss_best': best_valid_loss == avg_valid_loss,
-                'valid_accuracy': avg_valid_accuracy,
-                'dur': time() - t0,
+                info = {
+                    'epoch': num_epochs_past + epoch,
+                    'train_loss': avg_train_loss,
+                    'train_loss_best': best_train_loss == avg_train_loss,
+                    'valid_loss': avg_valid_loss,
+                    'valid_loss_best': best_valid_loss == avg_valid_loss,
+                    'valid_accuracy': avg_valid_accuracy,
+                    'dur': time() - t0,
                 }
-            if self.custom_scores:
-                for index, custom_score in enumerate(self.custom_scores):
-                    info[custom_score[0]] = avg_custom_scores[index]
-            self.train_history_.append(info)
+                # custom cut
+                if (avg_valid_loss > 15 and epoch > 20) or np.isnan(avg_valid_loss):
+                    break
+                if self.custom_scores:
+                    for index, custom_score in enumerate(self.custom_scores):
+                        info[custom_score[0]] = avg_custom_scores[index]
+                self.train_history_.append(info)
 
-            try:
-                for func in on_epoch_finished:
-                    func(self, self.train_history_)
-            except StopIteration:
-                break
+                try:
+                    for func in on_epoch_finished:
+                        func(self, self.train_history_)
+                except StopIteration:
+                    break
 
-        for func in on_training_finished:
-            func(self, self.train_history_)
+            for func in on_training_finished:
+                func(self, self.train_history_)
+            bad = False
 
     @staticmethod
     def apply_batch_func(func, Xb, yb=None):
