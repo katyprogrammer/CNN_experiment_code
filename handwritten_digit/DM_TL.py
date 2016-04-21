@@ -138,12 +138,16 @@ def custom_regularizor(layers):
     SI, SO, si, so = calc_shared(params)
     SI = np.array([np.amax(x)-np.amin(x) for x in SI])
     SO = np.array([np.amax(x)-np.amax(x) for x in SO])
-    # SI = np.array([np.var(x) for x in SI])
-    # SO = np.array([np.var(x) for x in SO])
-    L = np.array(range(1,len(layers)))
-    IL = len(layers)-L+1
-    reg = -(dot(SI,np.exp(IL))+dot(SO, np.exp(L)))
-    return np.exp(reg)*LAMBDA
+    #SI = np.array([np.var(x) for x in SI])
+    #SO = np.array([np.var(x) for x in SO])
+    #L = np.array(range(1,len(layers)))
+    #IL = len(layers)-L+1
+    #reg = -(dot(SI,np.exp(IL))+dot(SO, np.exp(L)))
+    SI = np.exp(sum([SI[x]-SI[x-1] for x in range(1,len(SI))]))
+    SO = np.exp(sum([SO[x-1]-SO[x-1] for x in range(1,len(SO))]))
+    print(SI)
+    print(SO)
+    return (SI+SO)*LAMBDA
 
 def control_layer_num(n, l):
     tl = l
@@ -247,7 +251,7 @@ def run(filename):
             acc = acc+1 if sum(compare) == 0 else acc
         accuracy = float(acc)/n
         print('accuracy={0}'.format(accuracy))
-        if accuracy > 0.7:
+        if accuracy > ACC:
             break
     # plot shared_input
     plt.boxplot(shared_all_layer_I)
@@ -263,9 +267,10 @@ def run(filename):
 
 SPLIT_RATIO = 0.9
 NUM = 10
-LN = 10
+LN = 20
 HN = 50
-LAMBDA = 10
+LAMBDA = 1
+ACC = 0.8
 EPOCH = 300
 
 fname = 'low'
