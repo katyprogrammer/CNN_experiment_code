@@ -388,7 +388,9 @@ class NeuralNet(BaseEstimator):
             accuracy = loss_eval
 
         all_params = self.get_all_params(trainable=True)
+        print('loss:{0}'.format(loss_train))
         grads = theano.grad(loss_train, all_params)
+        print('grad:{0}'.format(grads))
         for idx, param in enumerate(all_params):
             grad_scale = getattr(param.tag, 'grad_scale', 1)
             if grad_scale != 1:
@@ -518,6 +520,8 @@ class NeuralNet(BaseEstimator):
                 avg_valid_loss = np.average(
                     valid_losses, weights=batch_valid_sizes)
             else:
+                epoch -= 1
+                continue
                 avg_valid_loss = np.nan
 
             avg_valid_accuracy = np.mean(valid_accuracies)
