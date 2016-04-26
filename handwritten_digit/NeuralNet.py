@@ -78,7 +78,6 @@ def objective(layers,
     network_output = get_output(
         output_layer, deterministic=deterministic, **get_output_kw)
     loss = aggregate(loss_function(network_output, target))
-    print(loss)
     
     if custom_regularizor is not None:
         loss += custom_regularizor(layers)
@@ -88,7 +87,6 @@ def objective(layers,
     if l2:
         loss += regularization.regularize_layer_params(
             layers.values(), regularization.l2) * l2
-    print(loss)
     return loss
 
 
@@ -391,8 +389,9 @@ class NeuralNet(BaseEstimator):
             accuracy = loss_eval
 
         all_params = self.get_all_params(trainable=True)
-        theano.printing.pydotprint(loss_train, outfile="grad.png", var_with_name_simple=True)
+        # theano.printing.pydotprint(loss_train, outfile="obj_loss.png", var_with_name_simple=True)
         grads = theano.grad(loss_train, all_params)
+        # theano.printing.pydotprint(grads, outfile="grad.png", var_with_name_simple=True)
         for idx, param in enumerate(all_params):
             grad_scale = getattr(param.tag, 'grad_scale', 1)
             if grad_scale != 1:
