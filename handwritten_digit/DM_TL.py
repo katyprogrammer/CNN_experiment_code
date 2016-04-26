@@ -69,7 +69,7 @@ def calc_shared(params, symbolic=True):
             Ws += [np.array(params[layer][0])]
         cur_shared = importance(Ws[-1], last_layer_I, init_I, symbolic=symbolic)
         last_layer_I = cur_shared
-        shared_all_layer_I.append(T.var(cur_shared) if symbolic else np.var(cur_shared))
+        shared_all_layer_I.append(T.var(cur_shared) if symbolic else cur_shared)
     mid_layers.reverse()
     Ws.reverse()
     # backward
@@ -78,7 +78,7 @@ def calc_shared(params, symbolic=True):
         invW = dot(W.T, inv(dot(W, W.T))) if symbolic else np.dot(W.transpose(), np.linalg.pinv(np.dot(W, W.transpose())))
         cur_shared = importance(invW.eval(), last_layer_O, init_O) if symbolic else importance(invW, last_layer_O, init_O, symbolic=False)
         last_layer_O = cur_shared
-        shared_all_layer_O.append(T.var(cur_shared) if symbolic else np.var(cur_shared))
+        shared_all_layer_O.append(T.var(cur_shared) if symbolic else cur_shared)
     return shared_all_layer_I, shared_all_layer_O[::-1]
     
 def custom_regularizor(layers):
@@ -91,9 +91,12 @@ def custom_regularizor(layers):
 
 def control_layer_num(n, l):
     tl = l
-    for i in range(n):
+    tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
+    tl = CutLayer(tl, p=0.1)
+    for i in range(2,n-2):
         tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
-        # tl = CutLayer(tl, p=0.9)
+    tl = CutLayer(tl, p=0.1)
+    tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
     return tl
 
 
