@@ -92,12 +92,13 @@ def custom_regularizor(layers):
 
 def control_layer_num(n, l, F_inv=None):
     tl = l
+    if F_inv is not None:
+        P = [min(CUT_MAX, F_inv[i]) for i in range(n)]
+        P = [max(CUT_MIN, P[i]) for i in range(n)]
+        print(P)
     for i in range(n):
         tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
-        if F_inv is not None:
-            p = min(CUT_MAX, F_inv[i])
-            p = max(CUT_MIN, F_inv[i])
-        tl = CutLayer(tl, p=p) if F_inv is not None else tl
+        tl = CutLayer(tl, p=P[i]) if F_inv is not None else tl
     tl = DenseLayer(tl, num_units=HN, nonlinearity=None) if F_inv is not None else tl
     return tl
 
@@ -208,7 +209,6 @@ def get_shared_score(filename):
 def run(filename):
     # get_shared_score(filename)
     F_inv = pickle.load(open('{0}.pkl'.format(filename), 'r'))
-    print(F_inv)
     train, train_label = gen_data_label('{0}_train.csv'.format(filename))
     test, test_label = gen_data_label('{0}_test.csv'.format(filename))
     while True:
@@ -242,7 +242,7 @@ SPLIT_RATIO = 0.9
 NUM = 10
 LN = 10
 HN = 50
-CUT_MAX, CUT_MIN = 0.2, 0.01
+CUT_MAX, CUT_MIN = 0.1, 0.01
 LAMBDA = 1
 ACC = 0.5
 EPOCH = 300
