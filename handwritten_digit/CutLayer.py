@@ -34,11 +34,12 @@ class CutLayer(Layer):
         if any(s is None for s in input_shape):
             input_shape = input.shape
         # prev half: shared% from prev half input | back half (100-shared)% from back half output
-        A_shape = (input_shape[0], input_shape[1]/2)
-        B_shape = (input_shape[0],(input_shape[1]+1)/2)
-        A_select = self._srng.binomial(A_shape, p=self.shared, dtype=input.dtype)
-        B_select = self._srng.binomial(B_shape, p=1-self.shared, dtype=input.dtype)
-        selected = T.concatenate([A_select, B_select], axis=1)
-        return input * selected * self._srng.binomial(input_shape, p=retain_prob, dtype=input.dtype)
+        # A_shape = (input_shape[0], input_shape[1]/2)
+        # B_shape = (input_shape[0],(input_shape[1]+1)/2)
+        # A_select = self._srng.binomial(A_shape, p=self.shared, dtype=input.dtype)
+        # B_select = self._srng.binomial(B_shape, p=self.shared, dtype=input.dtype)
+        # selected = T.concatenate([A_select, B_select], axis=1)
+        # return input * selected
+        return input * self._srng.binomial(input_shape, p=retain_prob, dtype=input.dtype)
         
 cut = CutLayer

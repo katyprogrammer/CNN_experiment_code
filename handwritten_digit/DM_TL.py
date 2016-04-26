@@ -92,10 +92,10 @@ def custom_regularizor(layers):
 def control_layer_num(n, l):
     tl = l
     tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
-    tl = CutLayer(tl, p=0.2)
+    tl = CutLayer(tl, shared=0.8, p=0.2)
     for i in range(2,n-2):
         tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
-    tl = CutLayer(tl, p=0.2)
+    tl = CutLayer(tl, shared=0.8, p=0.2)
     tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
     return tl
 
@@ -212,7 +212,7 @@ def run(filename):
 SPLIT_RATIO = 0.9
 NUM = 10
 LN = 15
-HN = 100
+HN = 80
 LAMBDA = 1
 ACC = 0.85
 EPOCH = 300
