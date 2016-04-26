@@ -50,20 +50,30 @@ def importance(W, last_layer, init, symbolic=True):
 def calc_shared(params, symbolic=True):
     shared_all_layer_I, shared_all_layer_O = [], []
     mid_layers = params
+    if not symbolic:
+        params = params.get_all_params_values()
+        mid_layers = params.keys()[1:]
     last_layer_I, last_layer_O = None, None
-    init_I = theano.shared(np.array([1 for i in range(28*28)] + [0 for i in range(28*28)], dtype=theano.config.floatX)) if symbolic else np.array([1 for i in range(28*28)] + [0 for i in range(28*28)])
-    init_O = theano.shared(np.array([1 for i in range(10)] + [0 for i in range(10)], dtype=theano.config.floatX)) if symbolic else np.array([1 for i in range(10)] + [0 for i in range(10)])
+    tmp = [1 for i in range(28*28)] + [0 for i in range(28*28)]
+    init_I = theano.shared(np.array(tmp, dtype=theano.config.floatX)) if symbolic else np.array(tmp)
+    tmp = [1 for i in range(10)] + [0 for i in range(10)]
+    init_O = theano.shared(np.array(tmp, dtype=theano.config.floatX)) if symbolic else np.array(tmp)
     Ws = []
     # forward
     for layer in mid_layers:
-        Ws += [layer]
+        if symbolic:
+            Ws += [layer]
+        else:
+            if 'cut' in layer:
+                continue
+            Ws += [np.array(params[layer][0])]
         cur_shared = importance(Ws[-1], last_layer_I, init_I, symbolic=symbolic)
         last_layer_I = cur_shared
         shared_all_layer_I.append(T.var(cur_shared) if symbolic else np.var(cur_shared))
     mid_layers.reverse()
     Ws.reverse()
     # backward
-    for l in range(len(mid_layers)):
+    for l in range(len(Ws)):
         W = Ws[l]
         invW = dot(W.T, inv(dot(W, W.T))) if symbolic else np.dot(W.transpose(), np.linalg.pinv(np.dot(W, W.transpose())))
         cur_shared = importance(invW.eval(), last_layer_O, init_O) if symbolic else importance(invW, last_layer_O, init_O, symbolic=False)
@@ -83,7 +93,7 @@ def control_layer_num(n, l):
     tl = l
     for i in range(n):
         tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
-        tl = CutLayer(tl, p=0.5)
+        # tl = CutLayer(tl, p=0.9)
     return tl
 
 
@@ -172,7 +182,7 @@ def run(filename):
     while True:
         net = NN(EPOCH)
         net.fit(train, train_label)
-        shared_all_layer_I, shared_all_layer_O = calc_shared(get_all_params(net.get_all_layers()), symbolic=False)
+        shared_all_layer_I, shared_all_layer_O = calc_shared(net, symbolic=False)
         pred = net.predict(test)
         n = len(pred)
         acc = 0
