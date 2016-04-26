@@ -13,6 +13,7 @@ import theano
 from theano.tensor import dot, inv
 from NeuralNet import NeuralNet
 from CutLayer import CutLayer
+import pickle
 
 def read_and_split(filepath, split_ratio, num):
     df = pd.read_csv(filepath)
@@ -89,20 +90,21 @@ def custom_regularizor(layers):
     SO = np.exp(sum([SO[x-1]-SO[x-1] for x in range(1,len(SO))]))
     return (SI+SO)*LAMBDA
 
-def control_layer_num(n, l):
+def control_layer_num(n, l, F_inv=None):
     tl = l
-    tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
-    tl = CutLayer(tl, shared=0.8, p=0.2)
-    for i in range(2,n-2):
+    for i in range(n):
         tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
-    tl = CutLayer(tl, shared=0.8, p=0.2)
-    tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
+        if F_inv is not None:
+            p = min(CUT_MAX, F_inv[i])
+            p = max(CUT_MIN, F_inv[i])
+        tl = CutLayer(tl, p=p) if F_inv is not None else tl
+    tl = DenseLayer(tl, num_units=HN, nonlinearity=None) if F_inv is not None else tl
     return tl
 
 
-def NN(epoch):
+def NN(epoch, F_inv=None):
     l = InputLayer(name='input', shape=(None,1,28,28*2))
-    l = control_layer_num(LN, l)
+    l = control_layer_num(LN, l, F_inv)
     l = DenseLayer(l, num_units=20, nonlinearity=lasagne.nonlinearities.sigmoid)
     net = NeuralNet(l,
                     update = nesterov_momentum,
@@ -179,11 +181,38 @@ def plot_all_layer_shared_dist(shared_all_layer, filename):
         plt.savefig(os.path.join(filename,'layer_{0}'.format(i+1)))
         plt.hold(False)
 
-def run(filename):
+def get_shared_score(filename):
     train, train_label = gen_data_label('{0}_train.csv'.format(filename))
     test, test_label = gen_data_label('{0}_test.csv'.format(filename))
     while True:
         net = NN(EPOCH)
+        net.fit(train, train_label)
+        shared_all_layer_I, shared_all_layer_O = calc_shared(net, symbolic=False)
+        pred = net.predict(test)
+        n = len(pred)
+        acc = 0
+        for i in range(n):
+            p = select_max(pred[i])
+            compare = [0 if p[x]==test_label[i][x] else 1 for x in range(20)]
+            acc = acc+1 if sum(compare) == 0 else acc
+        accuracy = float(acc)/n
+        print('accuracy={0}'.format(accuracy))
+        if accuracy > ACC:
+            break
+    SI, SO = np.array([np.var(x) for x in shared_all_layer_I[:-1]]), np.array([np.var(x) for x in shared_all_layer_O[1:]])
+    F_inv = np.array([max(i,o) for (i,o) in zip(SI,SO)])
+    F_inv /= sum(F_inv)
+    pickle.dump(F_inv, open('{0}.pkl'.format(filename), 'w+'))
+    
+
+def run(filename):
+    # get_shared_score(filename)
+    F_inv = pickle.load(open('{0}.pkl'.format(filename), 'r'))
+    print(F_inv)
+    train, train_label = gen_data_label('{0}_train.csv'.format(filename))
+    test, test_label = gen_data_label('{0}_test.csv'.format(filename))
+    while True:
+        net = NN(EPOCH, F_inv=F_inv)
         net.fit(train, train_label)
         shared_all_layer_I, shared_all_layer_O = calc_shared(net, symbolic=False)
         pred = net.predict(test)
@@ -211,10 +240,11 @@ def run(filename):
 
 SPLIT_RATIO = 0.9
 NUM = 10
-LN = 15
-HN = 80
+LN = 10
+HN = 50
+CUT_MAX, CUT_MIN = 0.3, 0.01
 LAMBDA = 1
-ACC = 0.85
+ACC = 0.5
 EPOCH = 300
 
 fname = 'low'
