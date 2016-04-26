@@ -391,6 +391,7 @@ class NeuralNet(BaseEstimator):
             accuracy = loss_eval
 
         all_params = self.get_all_params(trainable=True)
+        theano.printing.pydotprint(loss_train, outfile="grad.png", var_with_name_simple=True)
         grads = theano.grad(loss_train, all_params)
         for idx, param in enumerate(all_params):
             grad_scale = getattr(param.tag, 'grad_scale', 1)
@@ -445,11 +446,11 @@ class NeuralNet(BaseEstimator):
         return self.fit(X, y, epochs=1)
 
     def train_loop(self, X, y, epochs=None):
-        bad = True
-        while bad:
+        nanF, abF = True, False
+        while nanF:
             epochs = epochs or self.max_epochs
             X_train, X_valid, y_train, y_valid = self.train_split(X, y, self)
-
+            # reset [later]
             on_batch_finished = self.on_batch_finished
             if not isinstance(on_batch_finished, (list, tuple)):
                 on_batch_finished = [on_batch_finished]
@@ -527,22 +528,26 @@ class NeuralNet(BaseEstimator):
                     'dur': time() - t0,
                 }
                 # custom cut
-                if (avg_valid_loss > 15 and epoch > 20) or np.isnan(avg_valid_loss):
+                if (avg_valid_loss > 20 and epoch > 20) or np.isnan(avg_valid_loss):
+                    abF = True
                     break
                 if self.custom_scores:
                     for index, custom_score in enumerate(self.custom_scores):
                         info[custom_score[0]] = avg_custom_scores[index]
                 self.train_history_.append(info)
-
                 try:
                     for func in on_epoch_finished:
                         func(self, self.train_history_)
                 except StopIteration:
                     break
-
+            if abF:
+                nanF, abF = True, False
+                continue
+            else:
+                break
             for func in on_training_finished:
                 func(self, self.train_history_)
-            bad = False
+            
 
     @staticmethod
     def apply_batch_func(func, Xb, yb=None):
