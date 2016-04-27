@@ -20,6 +20,7 @@ class CutLayer(Layer):
         self._srng = RandomStreams(get_rng().randint(1, 2147462579))
         self.p = p
         self.shared = shared
+        self.selected = None
 
     def get_output_for(self, input, **kwargs):
         """
@@ -40,6 +41,8 @@ class CutLayer(Layer):
         # B_select = self._srng.binomial(B_shape, p=self.shared, dtype=input.dtype)
         # selected = T.concatenate([A_select, B_select], axis=1)
         # return input * selected
-        return input * self._srng.binomial(input_shape, p=retain_prob, dtype=input.dtype)
+        if self.selected is None:
+            self.selected = self._srng.binomial(input_shape, p=retain_prob, dtype=input.dtype)
+        return input * self.selected
         
 cut = CutLayer

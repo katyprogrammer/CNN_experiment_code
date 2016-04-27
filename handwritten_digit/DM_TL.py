@@ -203,13 +203,13 @@ def get_shared_score(filename, tail):
     SI, SO = np.array([np.var(x) for x in shared_all_layer_I[:-1]]), np.array([np.var(x) for x in shared_all_layer_O[1:]])
     F_inv = np.array([max(i,o) for (i,o) in zip(SI,SO)])
     F_inv /= sum(F_inv)
-    pickle.dump(F_inv, open('{0}_{1}.pkl'.format(filename, tail), 'w+'))
+    pickle.dump(F_inv, open('{0}_{1}.pkl'.format(filename, HN), 'w+'))
     
 
 def run(filename, tail):
-    if(not os.path.exists('{0}_{1}.pkl'.format(filename, tail))):
+    if(not os.path.exists('{0}_{1}.pkl'.format(filename, HN))):
         get_shared_score(filename, tail)
-    F_inv = pickle.load(open('{0}_{1}.pkl'.format(filename, tail), 'r'))
+    F_inv = pickle.load(open('{0}_{1}.pkl'.format(filename, HN), 'r'))
     train, train_label = gen_data_label('{0}_train.csv'.format(filename))
     test, test_label = gen_data_label('{0}_test.csv'.format(filename))
     while True:
@@ -243,17 +243,18 @@ SPLIT_RATIO = 0.9
 NUM = 10
 LN = 10
 
-hn = [50, 75, 100]
+hn = [100]
 cM = [0.1, 0.05, 0.01]
-cm = [0.01, 0.001]
+cM = [0.01,0.05,0.1,0.25,0.5,0.75]
+cm = [0]
 
 HN = 50
-CUT_MAX, CUT_MIN = 0.1, 0.01
+CUT_MAX, CUT_MIN = 0.5, 0.01
 LAMBDA = 1
-ACC = 0.7
+ACC = 0.1
 EPOCH = 300
 
-skip, sk = 16, 0
+skip, sk = 0, 0
 for hi in hn:
     for Mi in cM:
         for mi in cm:
