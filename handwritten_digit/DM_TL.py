@@ -182,7 +182,7 @@ def plot_all_layer_shared_dist(shared_all_layer, filename):
         plt.savefig(os.path.join(filename,'layer_{0}'.format(i+1)))
         plt.hold(False)
 
-def get_shared_score(filename):
+def get_shared_score(filename, tail):
     train, train_label = gen_data_label('{0}_train.csv'.format(filename))
     test, test_label = gen_data_label('{0}_test.csv'.format(filename))
     while True:
@@ -203,12 +203,13 @@ def get_shared_score(filename):
     SI, SO = np.array([np.var(x) for x in shared_all_layer_I[:-1]]), np.array([np.var(x) for x in shared_all_layer_O[1:]])
     F_inv = np.array([max(i,o) for (i,o) in zip(SI,SO)])
     F_inv /= sum(F_inv)
-    pickle.dump(F_inv, open('{0}.pkl'.format(filename), 'w+'))
+    pickle.dump(F_inv, open('{0}_{1}.pkl'.format(filename, tail), 'w+'))
     
 
-def run(filename):
-    # get_shared_score(filename)
-    F_inv = pickle.load(open('{0}.pkl'.format(filename), 'r'))
+def run(filename, tail):
+    if(not os.path.exists('{0}_{1}.pkl'.format(filename, tail))):
+        get_shared_score(filename, tail)
+    F_inv = pickle.load(open('{0}_{1}.pkl'.format(filename, tail), 'r'))
     train, train_label = gen_data_label('{0}_train.csv'.format(filename))
     test, test_label = gen_data_label('{0}_test.csv'.format(filename))
     while True:
@@ -229,35 +230,60 @@ def run(filename):
     # plot shared_input
     plt.boxplot(shared_all_layer_I)
     plt.title('[{0} forward] acc={3}%\n{1} test instances, {2} correct'.format(filename, n,acc,100*accuracy))
-    plt.savefig('F_n={3},l={1},pn={2},{0}'.format(filename,LN,HN,NUM))
+    plt.savefig('F{0},{1}.png'.format(filename,tail))
     plt.hold(False)
     # plot shared_output
     plt.boxplot(shared_all_layer_O)
     plt.title('[{0} backward] acc={3}%\n{1} test instances, {2} correct'.format(filename, n,acc,100*accuracy))
-    plt.savefig('B_n={3},l={1},pn={2},{0}'.format(filename,LN,HN,NUM))
+    plt.savefig('B{0},{1}.png'.format(filename,tail))
     plt.hold(False)
     return net
 
 SPLIT_RATIO = 0.9
 NUM = 10
 LN = 10
+
+hn = [50, 75, 100]
+cM = [0.1, 0.05, 0.01]
+cm = [0.01, 0.001]
+
 HN = 50
 CUT_MAX, CUT_MIN = 0.1, 0.01
 LAMBDA = 1
-ACC = 0.5
+ACC = 0.7
 EPOCH = 300
 
-fname = 'low'
-A, B = [1,7,4], [0,9,6]
-# gen_data(A,B,SPLIT_RATIO,NUM,fname)
-net = run(fname)
+skip, sk = 16, 0
+for hi in hn:
+    for Mi in cM:
+        for mi in cm:
+            if sk < skip:
+                sk += 1
+                continue
+            HN, CUT_MAX, CUT_MIN = hi, Mi, mi
+            tail = '{0}_{1}_{2}'.format(hi,Mi,mi)
+            fname = 'low'
+            A, B = [1,7,4], [0,9,6]
+            net = run(fname, tail)
+            # fname = 'mid'
+            # A, B = [1,0,4], [7,9,6]
+            # run(fname, tail)
+            # fname = 'high'
+            # A, B = [1,7,0], [0,1,9]
+            # run(fname, tail)
 
-fname = 'mid'
-A, B = [1,0,4], [7,9,6]
-# gen_data(A,B,SPLIT_RATIO,NUM,fname)
-run(fname)
 
-fname = 'high'
-A, B = [1,7,0], [0,1,9]
-# gen_data(A,B,SPLIT_RATIO,NUM,fname)
-run(fname)
+# fname = 'low'
+# A, B = [1,7,4], [0,9,6]
+# # gen_data(A,B,SPLIT_RATIO,NUM,fname)
+# net = run(fname)
+
+# fname = 'mid'
+# A, B = [1,0,4], [7,9,6]
+# # gen_data(A,B,SPLIT_RATIO,NUM,fname)
+# run(fname)
+
+# fname = 'high'
+# A, B = [1,7,0], [0,1,9]
+# # gen_data(A,B,SPLIT_RATIO,NUM,fname)
+# run(fname)

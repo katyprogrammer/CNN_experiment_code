@@ -527,7 +527,7 @@ class NeuralNet(BaseEstimator):
                     'dur': time() - t0,
                 }
                 # custom cut
-                if (avg_valid_loss > 20 and epoch > 20) or np.isnan(avg_valid_loss):
+                if (avg_valid_loss > 40 and epoch > 20) or np.isnan(avg_valid_loss):
                     abF = True
                     break
                 if self.custom_scores:
