@@ -389,9 +389,10 @@ class NeuralNet(BaseEstimator):
             accuracy = loss_eval
 
         all_params = self.get_all_params(trainable=True)
-        # theano.printing.pydotprint(loss_train, outfile="obj_loss.png", var_with_name_simple=True)
+        #d3v.d3viz(loss_train, 'plot/obj_loss.html')
         grads = theano.grad(loss_train, all_params)
-        # theano.printing.pydotprint(grads, outfile="grad.png", var_with_name_simple=True)
+        #d3v.d3viz(grads, 'plot/grad.html')
+        
         for idx, param in enumerate(all_params):
             grad_scale = getattr(param.tag, 'grad_scale', 1)
             if grad_scale != 1:

@@ -7,6 +7,7 @@ import theano.tensor as T
 import matplotlib.pyplot as plt
 from lasagne.layers import InputLayer, DenseLayer, get_all_params
 from lasagne.updates import nesterov_momentum
+from lasagne import regularization
 from nolearn.lasagne import visualize
 import os
 import theano
@@ -90,20 +91,19 @@ def custom_regularizor(layers):
     SO = np.exp(sum([SO[x-1]-SO[x-1] for x in range(1,len(SO))]))
     return (SI+SO)*LAMBDA
 
+def l1_norm_regularizor(layers):
+    return regularization.regularize_layer_params(layers.values(), regularization.l1)
+
 def control_layer_num(n, l, F_inv=None):
     tl = l
-    if F_inv is not None:
-        P = [min(CUT_MAX, F_inv[i]) for i in range(n)]
-        P = [max(CUT_MIN, P[i]) for i in range(n)]
-        print(P)
     for i in range(n):
         tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
-        tl = CutLayer(tl, p=P[i]) if F_inv is not None else tl
+        # tl = CutLayer(tl, p=P[i]) if F_inv is not None else tl
     tl = DenseLayer(tl, num_units=HN, nonlinearity=None) if F_inv is not None else tl
     return tl
 
 
-def NN(epoch, F_inv=None):
+def NN(epoch, custom_regularizor=None, F_inv=None):
     l = InputLayer(name='input', shape=(None,1,28,28*2))
     l = control_layer_num(LN, l, F_inv)
     l = DenseLayer(l, num_units=20, nonlinearity=lasagne.nonlinearities.sigmoid)
@@ -116,7 +116,7 @@ def NN(epoch, F_inv=None):
                     train_split = TrainSplit(eval_size=0.2),
                     regression = True,
                     objective_loss_function = multilabel_objective,
-                    custom_regularizor = custom_regularizor
+                    custom_regularizor = custom_regularizor,
     )
     return net
 
@@ -181,39 +181,13 @@ def plot_all_layer_shared_dist(shared_all_layer, filename):
         plt.title('layer_{0}'.format(i+1))
         plt.savefig(os.path.join(filename,'layer_{0}'.format(i+1)))
         plt.hold(False)
-
-def get_shared_score(filename, tail):
-    train, train_label = gen_data_label('{0}_train.csv'.format(filename))
-    test, test_label = gen_data_label('{0}_test.csv'.format(filename))
-    while True:
-        net = NN(EPOCH)
-        net.fit(train, train_label)
-        shared_all_layer_I, shared_all_layer_O = calc_shared(net, symbolic=False)
-        pred = net.predict(test)
-        n = len(pred)
-        acc = 0
-        for i in range(n):
-            p = select_max(pred[i])
-            compare = [0 if p[x]==test_label[i][x] else 1 for x in range(20)]
-            acc = acc+1 if sum(compare) == 0 else acc
-        accuracy = float(acc)/n
-        print('accuracy={0}'.format(accuracy))
-        if accuracy > ACC:
-            break
-    SI, SO = np.array([np.var(x) for x in shared_all_layer_I[:-1]]), np.array([np.var(x) for x in shared_all_layer_O[1:]])
-    F_inv = np.array([max(i,o) for (i,o) in zip(SI,SO)])
-    F_inv /= sum(F_inv)
-    pickle.dump(F_inv, open('{0}_{1}.pkl'.format(filename, HN), 'w+'))
     
 
-def run(filename, tail):
-    if(not os.path.exists('{0}_{1}.pkl'.format(filename, HN))):
-        get_shared_score(filename, tail)
-    F_inv = pickle.load(open('{0}_{1}.pkl'.format(filename, HN), 'r'))
+def run(filename):
     train, train_label = gen_data_label('{0}_train.csv'.format(filename))
     test, test_label = gen_data_label('{0}_test.csv'.format(filename))
     while True:
-        net = NN(EPOCH, F_inv=F_inv)
+        net = NN(EPOCH, custom_regularizor=l1_norm_regularizor)
         net.fit(train, train_label)
         shared_all_layer_I, shared_all_layer_O = calc_shared(net, symbolic=False)
         pred = net.predict(test)
@@ -228,6 +202,7 @@ def run(filename, tail):
         if accuracy > ACC:
             break
     # plot shared_input
+    tail = '{0}'.format(HN)
     plt.boxplot(shared_all_layer_I)
     plt.title('[{0} forward] acc={3}%\n{1} test instances, {2} correct'.format(filename, n,acc,100*accuracy))
     plt.savefig('F{0},{1}.png'.format(filename,tail))
@@ -243,48 +218,23 @@ SPLIT_RATIO = 0.9
 NUM = 10
 LN = 10
 
-hn = [100]
-cM = [0.1, 0.05, 0.01]
-cM = [0.01,0.05,0.1,0.25,0.5,0.75]
-cm = [0]
-
 HN = 50
-CUT_MAX, CUT_MIN = 0.5, 0.01
 LAMBDA = 1
 ACC = 0.1
 EPOCH = 300
 
-skip, sk = 0, 0
-for hi in hn:
-    for Mi in cM:
-        for mi in cm:
-            if sk < skip:
-                sk += 1
-                continue
-            HN, CUT_MAX, CUT_MIN = hi, Mi, mi
-            tail = '{0}_{1}_{2}'.format(hi,Mi,mi)
-            fname = 'low'
-            A, B = [1,7,4], [0,9,6]
-            net = run(fname, tail)
-            # fname = 'mid'
-            # A, B = [1,0,4], [7,9,6]
-            # run(fname, tail)
-            # fname = 'high'
-            # A, B = [1,7,0], [0,1,9]
-            # run(fname, tail)
 
+fname = 'low'
+A, B = [1,7,4], [0,9,6]
+# gen_data(A,B,SPLIT_RATIO,NUM,fname)
+net = run(fname)
 
-# fname = 'low'
-# A, B = [1,7,4], [0,9,6]
-# # gen_data(A,B,SPLIT_RATIO,NUM,fname)
-# net = run(fname)
+fname = 'mid'
+A, B = [1,0,4], [7,9,6]
+# gen_data(A,B,SPLIT_RATIO,NUM,fname)
+run(fname)
 
-# fname = 'mid'
-# A, B = [1,0,4], [7,9,6]
-# # gen_data(A,B,SPLIT_RATIO,NUM,fname)
-# run(fname)
-
-# fname = 'high'
-# A, B = [1,7,0], [0,1,9]
-# # gen_data(A,B,SPLIT_RATIO,NUM,fname)
-# run(fname)
+fname = 'high'
+A, B = [1,7,0], [0,1,9]
+# gen_data(A,B,SPLIT_RATIO,NUM,fname)
+run(fname)
