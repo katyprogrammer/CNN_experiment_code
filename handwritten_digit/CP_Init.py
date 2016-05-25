@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 from lasagne.layers import InputLayer, DenseLayer
 from lasagne.updates import nesterov_momentum
 from NeuralNet import NeuralNet
+import time
+
+LOG = ""
 
 # data processing
 def read_and_split(filepath):
@@ -32,6 +35,9 @@ def get_classes(classes):
 def gen_data(A, B):
     A_train, A_test = get_classes(A)
     B_train, B_test = get_classes(B)
+
+    global LOG
+    LOG += "\ttrain\ttest\nA\t{0}\t{1}\nB\t{2}\t{3}\n".format(A_train.shape[0], A_test.shape[0], B_train.shape[0], B_test.shape[0])
     A_train.to_csv('{0}_A_train.csv'.format(RUN_NAME))
     B_train.to_csv('{0}_B_train.csv'.format(RUN_NAME))
     A_test.to_csv('{0}_A_test.csv'.format(RUN_NAME))
@@ -87,14 +93,23 @@ def save_params(A_OR_B, net):
     net.save_params_to('{0}_{1}_net.pkl'.format(RUN_NAME, A_OR_B))
 
 def run(A_OR_B, CP_R=None):
+    global LOG
     train, train_label = read_data('{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'train'))
     test, test_label = read_data('{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'test'))
     while True:
         net = NN(EPOCH)
         # load trained parameters
         if CP_R is not None:
+            # measure CP approximate time
+            st = time.time()
             net.load_CP_approx_params_from('{0}_{1}_net.pkl'.format(RUN_NAME, 'A'), HN, CP_R=CP_R)
+            ed = time.time()
+            LOG += "CP_approximate_exetime: {0}s\n".format(ed-st)
+        # measure fitting time
+        st = time.time()
         net.fit(train, train_label)
+        ed = time.time()
+        LOG += "training_time: {0}s\n".format(ed-st)
         pred = net.predict(test)
         n = len(pred)
         acc = 0
@@ -103,13 +118,14 @@ def run(A_OR_B, CP_R=None):
             compare = [0 if p[x]==test_label[i][x] else 1 for x in range(10)]
             acc = acc+1 if sum(compare) == 0 else acc
         accuracy = float(acc)/n
+        LOG += "[{0}_{2}] acc = {1}\n".format(A_OR_B, accuracy, EXP_NAME)
         print('accuracy={0}'.format(accuracy))
         if accuracy > ACC:
             break
     if CP_R is None:
         save_params(A_OR_B, net)
     else:
-        save_params('{0}_R'.format(A_OR_B), net)
+        save_params('{0}_R{1}'.format(A_OR_B, CP_R), net)
     return net
 
 # train vs test
@@ -119,14 +135,30 @@ NUM = None
 LN = 10
 HN = 50
 ACC = 0.7
-EPOCH = 100
+EPOCH = 50
 CP_R = 2
+
+f = open('log.txt', 'a+')
 
 RUN_NAME = '1st'
 A, B = [1,7,4,5,8], [2,3,6,0,9]
 gen_data(A, B)
+LOG += '---' * 9 + '\n'
+EXP_NAME = 'Baseline'
 net1 = run('A')
-# transfer raw parameter
-net2 = run('B')
-# transfer R low-rank approximation
-net2 = run('B', CP_R=CP_R)
+LOG += '---' * 9 + '\n'
+f.write(LOG)
+LOG = ""
+EXP_NAME = 'Baseline'
+net1 = run('B')
+LOG += '---' * 9 + '\n'
+f.write(LOG)
+LOG = ""
+for i in range(20):
+    CP_R = i
+    EXP_NAME = '{0}-LowRank'.format(CP_R)
+    # transfer R low-rank approximation
+    net2 = run('B', CP_R=CP_R)
+    LOG += '---' * 9 + '\n'
+    f.write(LOG)
+LOG = ""
