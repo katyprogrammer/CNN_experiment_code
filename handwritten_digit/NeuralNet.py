@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import cPickle
 import itertools
 from warnings import warn
 from time import time
@@ -12,6 +13,7 @@ from sklearn.base import BaseEstimator
 from sklearn.cross_validation import KFold, StratifiedKFold
 from sklearn.metrics import accuracy_score, mean_squared_error
 from sklearn.preprocessing import LabelEncoder
+from sktensor import dtensor, cp_als
 import theano
 from theano import tensor as T
 from nolearn.lasagne import PrintLog, PrintLayerInfo, BatchIterator, TrainSplit
@@ -613,12 +615,82 @@ class NeuralNet(BaseEstimator):
             return_value[name] = [p.get_value() for p in layer.get_params()]
         return return_value
 
+    # CP low-rank approximate by R rank-1 tensor
+    def approx_CP_R(self, value, R):
+        print(value.ndim)
+        if value.ndim < 2:
+            return value
+        T = dtensor(value)
+        P, fit, itr, exetimes = cp_als(T, R, init='random')
+        Y = None
+        for i in range(R):
+            y = P.lmbda[i]
+            o = None
+            for l in range(T.ndim):
+                o = P.U[l][:,i] if o is None else np.outer(o, P.U[l][:,i])
+            y = y * o
+            Y = y if Y is None else Y+y
+        return Y
+
+    def load_CP_approx_params_from(self, source, HN, CP_R=None):
+        self.initialize()
+        if isinstance(source, basestring):
+            with open(source, 'rb') as f:
+                source = cPickle.load(f)
+        if isinstance(source, NeuralNet):
+            source = source.get_all_params_values()
+        success = "Loaded parameters to layer '{}' (shape {})."
+        failure = ("Could not load parameters to layer '{}' because "
+                   "shapes did not match: {} vs {}.")
+        Key = source.keys()
+        print(Key)
+        n = 0
+        W, B = [], []
+        for key in Key:
+            layer = self.layers_.get(key)
+            if layer is not None and 'dense' in key:
+                print('{0}: {1}'.format(key, source[key][0].shape))
+                w, b = source[key][0], source[key][1]
+                W += [w]
+                B += [b]
+                n += 1
+        W, B = np.dstack(W), np.dstack(B)
+        print(W.shape)
+        print(B.shape)
+        CP_W = W if CP_R is None else self.approx_CP_R(W, CP_R)
+        CP_B = B if CP_R is None else self.approx_CP_R(B, CP_R)
+        print(W.shape)
+        print(B.shape)
+        n = 0
+        for key in Key:
+            values = source[key]
+            layer = self.layers_.get(key)
+            if layer is not None:
+                if 'dense' in key:
+                    v1 = layer.get_params()
+                    v1[0].set_value(W[:,:,n].reshape((HN,HN)))
+                    v1[1].set_value(B[:,:,n].reshape(HN))
+                    n += 1
+                else:
+                    for p1, p2v in zip(layer.get_params(), values):
+                        shape1 = p1.get_value().shape
+                        shape2 = p2v.shape
+                        shape1s = 'x'.join(map(str, shape1))
+                        shape2s = 'x'.join(map(str, shape2))
+                        if shape1 == shape2:
+                            p1.set_value(p2v)
+                            if self.verbose:
+                                print(success.format(key, shape1s, shape2s))
+                        else:
+                            if self.verbose:
+                                print(failure.format(key, shape1s, shape2s))
+
     def load_params_from(self, source):
         self.initialize()
 
         if isinstance(source, basestring):
             with open(source, 'rb') as f:
-                source = pickle.load(f)
+                source = cPickle.load(f)
 
         if isinstance(source, NeuralNet):
             source = source.get_all_params_values()
@@ -648,7 +720,7 @@ class NeuralNet(BaseEstimator):
     def save_params_to(self, fname):
         params = self.get_all_params_values()
         with open(fname, 'wb') as f:
-            pickle.dump(params, f, -1)
+            cPickle.dump(params, f, -1)
 
     def load_weights_from(self, source):
         warn("The 'load_weights_from' method will be removed in nolearn 0.6. "

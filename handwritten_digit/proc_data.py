@@ -9,4 +9,4 @@ def split_by_digit(fname):
         d = df[df['label']==digit]
         d.to_csv(os.path.join('train','{0}.csv'.format(digit)))
 
-split_by_digit('input/train.csv')
+split_by_digit('input/MNIST.csv')

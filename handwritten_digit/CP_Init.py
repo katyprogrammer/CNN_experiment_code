@@ -7,12 +7,12 @@ import matplotlib.pyplot as plt
 from lasagne.layers import InputLayer, DenseLayer
 from lasagne.updates import nesterov_momentum
 from NeuralNet import NeuralNet
-import cPickle
 
 # data processing
 def read_and_split(filepath):
     df = pd.read_csv(filepath)
-    df = df.iloc[:NUM/SPLIT_RATIO]
+    if NUM is not None:
+        df = df.iloc[:NUM/SPLIT_RATIO]
     split = int(df.shape[0]*SPLIT_RATIO)
     train = df.iloc[:split]
     test = df.iloc[split:]
@@ -63,6 +63,7 @@ def control_layer_num(n, l):
 
 def NN(epoch, custom_regularizor=None):
     l = InputLayer(name='input', shape=(None,1,28,28))
+    l = DenseLayer(l, name='input_1', num_units=HN, nonlinearity=None)
     l = control_layer_num(LN, l)
     l = DenseLayer(l, name='output', num_units=10, nonlinearity=lasagne.nonlinearities.sigmoid)
     net = NeuralNet(l,
@@ -83,13 +84,16 @@ def select_max(x):
     return np.array([1 if i==A else 0 for i in range(10)])
 
 def save_params(A_OR_B, net):
-    cPickle.dump(net.get_all_params_values(), open('{0}_{1}_net.pkl'.format(RUN_NAME, A_OR_B), 'w+'))
+    net.save_params_to('{0}_{1}_net.pkl'.format(RUN_NAME, A_OR_B))
 
-def run(A_OR_B, CP_Init=False):
+def run(A_OR_B, CP_R=None):
     train, train_label = read_data('{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'train'))
     test, test_label = read_data('{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'test'))
     while True:
         net = NN(EPOCH)
+        # load trained parameters
+        if CP_R is not None:
+            net.load_CP_approx_params_from('{0}_{1}_net.pkl'.format(RUN_NAME, 'A'), HN, CP_R=CP_R)
         net.fit(train, train_label)
         pred = net.predict(test)
         n = len(pred)
@@ -102,20 +106,27 @@ def run(A_OR_B, CP_Init=False):
         print('accuracy={0}'.format(accuracy))
         if accuracy > ACC:
             break
-    save_params(A_OR_B, net)
+    if CP_R is None:
+        save_params(A_OR_B, net)
+    else:
+        save_params('{0}_R'.format(A_OR_B), net)
     return net
 
 # train vs test
 SPLIT_RATIO = 0.9
-NUM = 1000
+NUM = None
 # neural configuration
 LN = 10
 HN = 50
-ACC = 0.9
-EPOCH = 50
+ACC = 0.7
+EPOCH = 100
+CP_R = 2
 
 RUN_NAME = '1st'
-A, B = [1,7,4], [0,9,6]
+A, B = [1,7,4,5,8], [2,3,6,0,9]
 gen_data(A, B)
 net1 = run('A')
-# net2 = run('B')
+# transfer raw parameter
+net2 = run('B')
+# transfer R low-rank approximation
+net2 = run('B', CP_R=CP_R)
