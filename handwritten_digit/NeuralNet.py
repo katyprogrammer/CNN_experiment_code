@@ -628,7 +628,7 @@ class NeuralNet(BaseEstimator):
             Y = y if Y is None else Y+y
         return Y
 
-    def load_CP_approx_params_from(self, source, HN, CP_R=None):
+    def load_CP_approx_params_from(self, source, HN, LNum, CP_R=None):
         self.initialize()
         if isinstance(source, basestring):
             with open(source, 'rb') as f:
@@ -644,7 +644,7 @@ class NeuralNet(BaseEstimator):
         W, B = [], []
         for key in Key:
             layer = self.layers_.get(key)
-            if layer is not None and 'dense' in key:
+            if layer is not None and 'dense' in key and n < LNum: # transfer only LNum layers
                 print('{0}: {1}'.format(key, source[key][0].shape))
                 w, b = source[key][0], source[key][1]
                 W += [w]
@@ -663,10 +663,13 @@ class NeuralNet(BaseEstimator):
             layer = self.layers_.get(key)
             if layer is not None:
                 if 'dense' in key:
-                    v1 = layer.get_params()
-                    v1[0].set_value(W[:,:,n].reshape((HN,HN)))
-                    v1[1].set_value(B[:,:,n].reshape(HN))
-                    n += 1
+                    if n < LNum: # transfer
+                        v1 = layer.get_params()
+                        v1[0].set_value(W[:,:,n].reshape((HN,HN)))
+                        v1[1].set_value(B[:,:,n].reshape(HN))
+                        n += 1
+                    else: # random initialized
+                        self.initialize_layers(layers=layer)
                 else:
                     for p1, p2v in zip(layer.get_params(), values):
                         shape1 = p1.get_value().shape

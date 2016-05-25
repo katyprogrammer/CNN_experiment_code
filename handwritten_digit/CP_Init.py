@@ -92,7 +92,7 @@ def select_max(x):
 def save_params(A_OR_B, net):
     net.save_params_to('{0}_{1}_net.pkl'.format(RUN_NAME, A_OR_B))
 
-def run(A_OR_B, CP_R=None):
+def run(A_OR_B, CP_R=None, LNum=None):
     global LOG
     train, train_label = read_data('{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'train'))
     test, test_label = read_data('{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'test'))
@@ -102,7 +102,10 @@ def run(A_OR_B, CP_R=None):
         if CP_R is not None:
             # measure CP approximate time
             st = time.time()
-            net.load_CP_approx_params_from('{0}_{1}_net.pkl'.format(RUN_NAME, 'A'), HN, CP_R=CP_R)
+            if LNum is None:
+                global LN
+                LNum = LN
+            net.load_CP_approx_params_from('{0}_{1}_net.pkl'.format(RUN_NAME, 'A'), HN, LNum, CP_R=CP_R)
             ed = time.time()
             LOG += "CP_approximate_exetime: {0}s\n".format(ed-st)
         # measure fitting time
@@ -135,12 +138,40 @@ NUM = None
 LN = 10
 HN = 50
 ACC = 0.7
-EPOCH = 50
-CP_R = 2
+EPOCH = 200
 
-f = open('log.txt', 'a+')
 
-RUN_NAME = '1st'
+# RUN_NAME = 'rank'
+# # logging
+# f = open('log_{0}.txt'.format(RUN_NAME), 'a+')
+# A, B = [1,7,4,5,8], [2,3,6,0,9]
+# # gen_data(A, B)
+
+# LOG += '---' * 9 + '\n'
+# EXP_NAME = 'Baseline'
+# net1 = run('A')
+# LOG += '---' * 9 + '\n'
+# f.write(LOG)
+
+# LOG = ""
+# EXP_NAME = 'Baseline'
+# net1 = run('B')
+# LOG += '---' * 9 + '\n'
+# f.write(LOG)
+
+# LOG = ""
+# for i in range(1,10):
+#     EXP_NAME = '{0}-LowRank'.format(i)
+#     # transfer R low-rank approximation
+#     net2 = run('B', CP_R=i)
+#     LOG += '---' * 9 + '\n'
+#     f.write(LOG)
+#     LOG = ""
+
+
+RUN_NAME = 'LNum'
+# logging
+f = open('log_{0}.txt'.format(RUN_NAME), 'a+')
 A, B = [1,7,4,5,8], [2,3,6,0,9]
 gen_data(A, B)
 LOG += '---' * 9 + '\n'
@@ -153,12 +184,13 @@ EXP_NAME = 'Baseline'
 net1 = run('B')
 LOG += '---' * 9 + '\n'
 f.write(LOG)
+
 LOG = ""
-for i in range(20):
-    CP_R = i
-    EXP_NAME = '{0}-LowRank'.format(CP_R)
-    # transfer R low-rank approximation
-    net2 = run('B', CP_R=CP_R)
-    LOG += '---' * 9 + '\n'
-    f.write(LOG)
-LOG = ""
+for i in range(1,5):
+    for j in range(1,11):
+        EXP_NAME = '{0}_rank1_{1}_Layer'.format(i, j)
+        # transfer R low-rank approximation
+        net2 = run('B', CP_R=i, LNum=j)
+        LOG += '---' * 9 + '\n'
+        f.write(LOG)
+        LOG = ""
