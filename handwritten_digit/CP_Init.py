@@ -173,7 +173,7 @@ RUN_NAME = 'LNum'
 # logging
 f = open('log_{0}.txt'.format(RUN_NAME), 'a+')
 A, B = [1,7,4,5,8], [2,3,6,0,9]
-gen_data(A, B)
+# gen_data(A, B)
 LOG += '---' * 9 + '\n'
 EXP_NAME = 'Baseline'
 net1 = run('A')

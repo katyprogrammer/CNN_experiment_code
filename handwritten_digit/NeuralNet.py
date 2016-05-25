@@ -662,14 +662,11 @@ class NeuralNet(BaseEstimator):
             values = source[key]
             layer = self.layers_.get(key)
             if layer is not None:
-                if 'dense' in key:
-                    if n < LNum: # transfer
-                        v1 = layer.get_params()
-                        v1[0].set_value(W[:,:,n].reshape((HN,HN)))
-                        v1[1].set_value(B[:,:,n].reshape(HN))
-                        n += 1
-                    else: # random initialized
-                        self.initialize_layers(layers=layer)
+                if 'dense' in key and n < LNum: # transfer
+                    v1 = layer.get_params()
+                    v1[0].set_value(W[:,:,n].reshape((HN,HN)))
+                    v1[1].set_value(B[:,:,n].reshape(HN))
+                    n += 1
                 else:
                     for p1, p2v in zip(layer.get_params(), values):
                         shape1 = p1.get_value().shape
