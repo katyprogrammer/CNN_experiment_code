@@ -7,7 +7,10 @@ import matplotlib.pyplot as plt
 from lasagne.layers import InputLayer, DenseLayer
 from lasagne.updates import nesterov_momentum
 from NeuralNet import NeuralNet
+import os
+from os.path import join
 import time
+import cPickle
 
 LOG = ""
 
@@ -38,10 +41,10 @@ def gen_data(A, B):
 
     global LOG
     LOG += "\ttrain\ttest\nA\t{0}\t{1}\nB\t{2}\t{3}\n".format(A_train.shape[0], A_test.shape[0], B_train.shape[0], B_test.shape[0])
-    A_train.to_csv('{0}_A_train.csv'.format(RUN_NAME))
-    B_train.to_csv('{0}_B_train.csv'.format(RUN_NAME))
-    A_test.to_csv('{0}_A_test.csv'.format(RUN_NAME))
-    B_test.to_csv('{0}_B_test.csv'.format(RUN_NAME))
+    A_train.to_csv(join(RUN_NAME, '{0}_A_train.csv'.format(RUN_NAME)))
+    B_train.to_csv(join(RUN_NAME, '{0}_B_train.csv'.format(RUN_NAME)))
+    A_test.to_csv(join(RUN_NAME, '{0}_A_test.csv'.format(RUN_NAME)))
+    B_test.to_csv(join(RUN_NAME, '{0}_B_test.csv'.format(RUN_NAME)))
 
 def read_data(filename):
     df = pd.read_csv(filename)
@@ -90,12 +93,12 @@ def select_max(x):
     return np.array([1 if i==A else 0 for i in range(10)])
 
 def save_params(A_OR_B, net):
-    net.save_params_to('{0}_{1}_net.pkl'.format(RUN_NAME, A_OR_B))
+    net.save_params_to(join(RUN_NAME, '{0}_{1}_net.pkl'.format(RUN_NAME, A_OR_B)))
 
 def run(A_OR_B, CP_R=None, LNum=None):
     global LOG
-    train, train_label = read_data('{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'train'))
-    test, test_label = read_data('{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'test'))
+    train, train_label = read_data(join(RUN_NAME, '{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'train')))
+    test, test_label = read_data(join(RUN_NAME, '{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'test')))
     while True:
         net = NN(EPOCH)
         # load trained parameters
@@ -105,7 +108,7 @@ def run(A_OR_B, CP_R=None, LNum=None):
             if LNum is None:
                 global LN
                 LNum = LN
-            net.load_CP_approx_params_from('{0}_{1}_net.pkl'.format(RUN_NAME, 'A'), HN, LNum, CP_R=CP_R)
+            net.load_CP_approx_params_from(join(RUN_NAME, '{0}_{1}_net.pkl'.format(RUN_NAME, 'A')), HN, LNum, CP_R=CP_R)
             ed = time.time()
             LOG += "CP_approximate_exetime: {0}s\n".format(ed-st)
         # measure fitting time
@@ -127,8 +130,10 @@ def run(A_OR_B, CP_R=None, LNum=None):
             break
     if CP_R is None:
         save_params(A_OR_B, net)
+        cPickle.dump(net.train_history_, open(join(RUN_NAME, '{0}_{1}.pkl'.format(A_OR_B, EXP_NAME)), 'w+'))
     else:
         save_params('{0}_R{1}'.format(A_OR_B, CP_R), net)
+        cPickle.dump(net.train_history_, open(join(RUN_NAME, '{0}_{1}.pkl'.format(A_OR_B, EXP_NAME)), 'w+'))
     return net
 
 # train vs test
@@ -137,12 +142,16 @@ NUM = None
 # neural configuration
 LN = 10 # layer number
 HN = 50 # hidden unit per layer
-ACC = 0.7
+ACC = 0.1
 EPOCH = 35
 
 RUN_NAME = 'MLP_{0}LN_{1}HN'.format(LN,HN)
+if not os.path.exists(RUN_NAME):
+    os.makedirs(RUN_NAME)
+
+
 # logging
-f = open('log_{0}.txt'.format(RUN_NAME), 'a+')
+f = open(join(RUN_NAME, 'log_{0}.txt'.format(RUN_NAME)), 'a+')
 A, B = [1,7,4,5,8], [2,3,6,0,9] # AB
 # A, B = [2,3,6,0,9], [1,7,4,5,8] # BA
 gen_data(A, B)

@@ -43,6 +43,7 @@ def plot_acc(fin, fout):
     plt.xlabel('#transfered layers')
     plt.ylabel('accuracy')
     plt.savefig('{0}_acc.png'.format(fout))
+    return (R,L)
 
 def plot_time(fin, fout):
     plt.clf()
@@ -76,8 +77,32 @@ def plot_time(fin, fout):
     plt.xlabel('#transfered layers')
     plt.ylabel('time (s)')
     plt.savefig('{0}_time.png'.format(fout))
+    return (R,L)
 
+def plot_loss(fname, run):
+    plt.clf()
+    X = pd.read_pickle(fname)
+    EPOCH = range(len(X))
+    tloss, vloss = [X[i]['train_loss'] for i in EPOCH], [X[i]['valid_loss'] for i in EPOCH]
+    plt.plot(EPOCH, tloss, label='train loss')
+    plt.plot(EPOCH, vloss, label='valid loss')
+    plt.title(run)
+    plt.legend()
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    plt.savefig('{0}.png'.format(run))
+
+def plot_all_loss(R, L):
+    plt.clf()
+    # Baseline
+    plot_loss('A_Baseline.pkl', 'A_baseline')
+    # other
+    for r in R:
+        for l in L:
+            plot_loss('B_{0}_rank1_{1}_Layer.pkl'.format(r,l), 'B_{0}R_{1}L'.format(r,l))
+    
 opts = parse_arg()
 fin, fout = opts.inFile, opts.outFile
 plot_acc(fin, fout)
-plot_time(fin, fout)
+R,L = plot_time(fin, fout)
+plot_all_loss(R, L)
