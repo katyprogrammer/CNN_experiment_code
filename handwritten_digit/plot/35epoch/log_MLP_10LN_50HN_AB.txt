@@ -1,0 +1,105 @@
+	train	test
+A	30112	5020
+B	29884	4984
+---------------------------
+training_time: 7.28434085846s
+[A_Baseline] acc = 0.0
+training_time: 5.57708287239s
+[A_Baseline] acc = 0.0
+training_time: 5.80139517784s
+[A_Baseline] acc = 0.0
+training_time: 58.1927580833s
+[A_Baseline] acc = 0.848007968127
+---------------------------
+training_time: 3.95660090446s
+[B_Baseline] acc = 0.198033707865
+training_time: 63.5237998962s
+[B_Baseline] acc = 0.764446227929
+---------------------------
+CP_approximate_exetime: 1.79511499405s
+training_time: 2.24119520187s
+[B_1_rank1_1_Layer] acc = 0.198033707865
+CP_approximate_exetime: 1.94683694839s
+training_time: 2.42094898224s
+[B_1_rank1_1_Layer] acc = 0.198033707865
+CP_approximate_exetime: 1.89979815483s
+training_time: 58.2577259541s
+[B_1_rank1_1_Layer] acc = 0.762640449438
+---------------------------
+CP_approximate_exetime: 1.82142281532s
+training_time: 3.74760293961s
+[B_1_rank1_2_Layer] acc = 0.198033707865
+CP_approximate_exetime: 2.42660784721s
+training_time: 58.2918159962s
+[B_1_rank1_2_Layer] acc = 0.763041733547
+---------------------------
+CP_approximate_exetime: 2.02335786819s
+training_time: 63.4575951099s
+[B_1_rank1_3_Layer] acc = 0.760834670947
+---------------------------
+CP_approximate_exetime: 1.86447191238s
+training_time: 56.838914156s
+[B_1_rank1_4_Layer] acc = 0.763443017657
+---------------------------
+CP_approximate_exetime: 1.91364598274s
+training_time: 56.1513080597s
+[B_1_rank1_5_Layer] acc = 0.761637239165
+---------------------------
+CP_approximate_exetime: 1.80532097816s
+training_time: 58.2880079746s
+[B_1_rank1_6_Layer] acc = 0.763643659711
+---------------------------
+CP_approximate_exetime: 1.8199930191s
+training_time: 55.2149701118s
+[B_1_rank1_7_Layer] acc = 0.762038523274
+---------------------------
+CP_approximate_exetime: 1.92302393913s
+training_time: 55.0327000618s
+[B_1_rank1_8_Layer] acc = 0.757423756019
+---------------------------
+CP_approximate_exetime: 1.94034385681s
+training_time: 55.6195688248s
+[B_1_rank1_9_Layer] acc = 0.760433386838
+---------------------------
+CP_approximate_exetime: 1.85510206223s
+training_time: 3.4716258049s
+[B_2_rank1_1_Layer] acc = 0.198033707865
+CP_approximate_exetime: 1.79047608376s
+training_time: 2.1929500103s
+[B_2_rank1_1_Layer] acc = 0.198033707865
+CP_approximate_exetime: 1.99160599709s
+training_time: 59.2768809795s
+[B_2_rank1_1_Layer] acc = 0.765248796148
+---------------------------
+CP_approximate_exetime: 1.88477087021s
+training_time: 57.6752550602s
+[B_2_rank1_2_Layer] acc = 0.760834670947
+---------------------------
+CP_approximate_exetime: 2.0770418644s
+training_time: 56.1343638897s
+[B_2_rank1_3_Layer] acc = 0.761035313002
+---------------------------
+CP_approximate_exetime: 1.94350910187s
+training_time: 59.3072919846s
+[B_2_rank1_4_Layer] acc = 0.761436597111
+---------------------------
+CP_approximate_exetime: 2.01961612701s
+training_time: 57.0478568077s
+[B_2_rank1_5_Layer] acc = 0.75702247191
+---------------------------
+CP_approximate_exetime: 1.95037198067s
+training_time: 57.8505179882s
+[B_2_rank1_6_Layer] acc = 0.760032102729
+---------------------------
+CP_approximate_exetime: 2.19052195549s
+training_time: 55.7817549706s
+[B_2_rank1_7_Layer] acc = 0.76183788122
+---------------------------
+CP_approximate_exetime: 1.79384899139s
+training_time: 57.0258479118s
+[B_2_rank1_8_Layer] acc = 0.762239165329
+---------------------------
+CP_approximate_exetime: 1.86943507195s
+training_time: 54.9561989307s
+[B_2_rank1_9_Layer] acc = 0.757825040128
+---------------------------

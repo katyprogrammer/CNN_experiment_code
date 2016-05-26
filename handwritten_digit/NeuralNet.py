@@ -528,7 +528,7 @@ class NeuralNet(BaseEstimator):
                 'dur': time() - t0,
             }
             # custom cut
-            if (avg_valid_loss > 40 and epoch > 20) or np.isnan(avg_valid_loss):
+            if np.isnan(avg_valid_loss):
                 break
             # cut on little improvement
             if prev_acc is not None and np.abs(prev_acc-avg_valid_accuracy) < 1e-4:

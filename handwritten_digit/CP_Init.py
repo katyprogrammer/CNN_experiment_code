@@ -143,8 +143,8 @@ EPOCH = 35
 RUN_NAME = 'MLP_{0}LN_{1}HN'.format(LN,HN)
 # logging
 f = open('log_{0}.txt'.format(RUN_NAME), 'a+')
-# A, B = [1,7,4,5,8], [2,3,6,0,9]
-A, B = [1,2,3,4,5], [6,7,8,9,0]
+A, B = [1,7,4,5,8], [2,3,6,0,9] # AB
+# A, B = [2,3,6,0,9], [1,7,4,5,8] # BA
 gen_data(A, B)
 LOG += '---' * 9 + '\n'
 EXP_NAME = 'Baseline'
