@@ -52,24 +52,29 @@ def read_data(filename):
     data = np.array(df[header].values).reshape((-1,1,28,28)).astype(np.uint8)
     label = []
     for idx, row in df.iterrows():
-        l = int(row['label'])
+        l = np.zeros(10)
+        l[int(row['label'])] = 1
         label += [l]
     label = np.array(label).astype(np.uint8)
     return data, label
     
 
 # training
+def objective(predictions, targets):
+    one = np.float32(1.0)
+    return -T.sum(targets*T.log(predictions) + (one-targets)*T.log(one-predictions), axis=1)
+
 def control_layer_num(n, l):
     tl = l
     for i in range(n):
-        tl = DenseLayer(tl, num_units=HN, nonlinearity=lasagne.nonlinearities.rectify)
+        tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
     return tl
 
 def NN(epoch, custom_regularizor=None):
     l = InputLayer(name='input', shape=(None,1,28,28))
-    l = DenseLayer(l, name='input_1', num_units=HN, nonlinearity=lasagne.nonlinearities.rectify)
+    l = DenseLayer(l, name='input_1', num_units=HN, nonlinearity=None)
     l = control_layer_num(LN, l)
-    l = DenseLayer(l, name='output', num_units=10, nonlinearity=lasagne.nonlinearities.softmax)
+    l = DenseLayer(l, name='output', num_units=10, nonlinearity=lasagne.nonlinearities.sigmoid)
     net = NeuralNet(l,
                     update = nesterov_momentum,
                     update_learning_rate = 1e-5,
@@ -77,9 +82,15 @@ def NN(epoch, custom_regularizor=None):
                     max_epochs = epoch,
                     verbose = 1,
                     train_split = TrainSplit(eval_size=0.2),
+                    regression = True,
+                    objective_loss_function = objective,
                     custom_regularizor = custom_regularizor,
     )
     return net
+
+def select_max(x):
+    A = np.argmax(x)
+    return np.array([1 if i==A else 0 for i in range(10)])
 
 def save_params(A_OR_B, net):
     net.save_params_to(join(RUN_NAME, '{0}_{1}_net.pkl'.format(RUN_NAME, A_OR_B)))
@@ -97,12 +108,9 @@ def run(A_OR_B, CP_R=None, LNum=None):
             if LNum is None:
                 global LN
                 LNum = LN
-            if LNum == -1: # copy all A
-                net.load_params_from(join(RUN_NAME, '{0}_{1}_net.pkl'.format(RUN_NAME, 'A')))
-            else:
-                net.load_CP_approx_params_from(join(RUN_NAME, '{0}_{1}_net.pkl'.format(RUN_NAME, 'A')), HN, LNum, CP_R=CP_R)
-                ed = time.time()
-                LOG += "CP_approximate_exetime: {0}s\n".format(ed-st)
+            net.load_CP_approx_params_from(join(RUN_NAME, '{0}_{1}_net.pkl'.format(RUN_NAME, 'A')), HN, LNum, CP_R=CP_R)
+            ed = time.time()
+            LOG += "CP_approximate_exetime: {0}s\n".format(ed-st)
         # measure fitting time
         st = time.time()
         net.fit(train, train_label)
@@ -112,7 +120,9 @@ def run(A_OR_B, CP_R=None, LNum=None):
         n = len(pred)
         acc = 0
         for i in range(n):
-            acc = acc+1 if pred[i]==test_label[i] else acc
+            p = select_max(pred[i])
+            compare = [0 if p[x]==test_label[i][x] else 1 for x in range(10)]
+            acc = acc+1 if sum(compare) == 0 else acc
         accuracy = float(acc)/n
         LOG += "[{0}_{2}] acc = {1}\n".format(A_OR_B, accuracy, EXP_NAME)
         print('accuracy={0}'.format(accuracy))
@@ -132,8 +142,8 @@ NUM = None
 # neural configuration
 LN = 10 # layer number
 HN = 50 # hidden unit per layer
-ACC = 0.8
-EPOCH = 100
+ACC = 0.75
+EPOCH = 35
 
 RUN_NAME = 'MLP_{0}LN_{1}HN'.format(LN,HN)
 if not os.path.exists(RUN_NAME):
@@ -144,8 +154,6 @@ if not os.path.exists(RUN_NAME):
 f = open(join(RUN_NAME, 'log_{0}.txt'.format(RUN_NAME)), 'a+')
 A, B = [1,7,4,5,8], [2,3,6,0,9] # AB
 A, B = [2,3,6,0,9], [1,7,4,5,8] # BA
-
-
 gen_data(A, B)
 LOG += '---' * 9 + '\n'
 EXP_NAME = 'Baseline'
@@ -155,11 +163,6 @@ f.write(LOG)
 LOG = ""
 EXP_NAME = 'Baseline'
 net1 = run('B')
-LOG += '---' * 9 + '\n'
-f.write(LOG)
-LOG += ""
-EXP_NAME = 'B_Raw'
-net = run('B', CP_R=-1, LNum=-1)
 LOG += '---' * 9 + '\n'
 f.write(LOG)
 

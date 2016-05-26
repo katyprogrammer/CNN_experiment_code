@@ -5,6 +5,7 @@ from nolearn.lasagne import TrainSplit
 import theano.tensor as T
 import matplotlib.pyplot as plt
 from lasagne.layers import InputLayer, DenseLayer
+from lasagne import layers
 from lasagne.updates import nesterov_momentum
 from NeuralNet import NeuralNet
 import os
@@ -59,25 +60,59 @@ def read_data(filename):
     
 
 # training
+def objective(predictions, targets):
+    one = np.float32(1.0)
+    return -T.sum(targets*T.log(predictions) + (one-targets)*T.log(one-predictions), axis=1)
+
 def control_layer_num(n, l):
     tl = l
     for i in range(n):
-        tl = DenseLayer(tl, num_units=HN, nonlinearity=lasagne.nonlinearities.rectify)
+        tl = DenseLayer(tl, num_units=HN, nonlinearity=None)
     return tl
 
-def NN(epoch, custom_regularizor=None):
-    l = InputLayer(name='input', shape=(None,1,28,28))
-    l = DenseLayer(l, name='input_1', num_units=HN, nonlinearity=lasagne.nonlinearities.rectify)
-    l = control_layer_num(LN, l)
-    l = DenseLayer(l, name='output', num_units=10, nonlinearity=lasagne.nonlinearities.softmax)
-    net = NeuralNet(l,
-                    update = nesterov_momentum,
-                    update_learning_rate = 1e-5,
-                    update_momentum = 0.9,
-                    max_epochs = epoch,
-                    verbose = 1,
-                    train_split = TrainSplit(eval_size=0.2),
-                    custom_regularizor = custom_regularizor,
+def CNN(epoch):
+    net = NeuralNet(
+    layers=[('input', layers.InputLayer),
+            ('conv2d1', layers.Conv2DLayer),
+            ('maxpool1', layers.MaxPool2DLayer),
+            ('conv2d2', layers.Conv2DLayer),
+            ('maxpool2', layers.MaxPool2DLayer),
+            ('dropout1', layers.DropoutLayer),
+            ('dense', layers.DenseLayer),
+            ('dropout2', layers.DropoutLayer),
+            ('output', layers.DenseLayer),
+            ],
+    # input layer
+    input_shape=(None, 1, 28, 28),
+    # layer conv2d1
+    conv2d1_num_filters=32,
+    conv2d1_filter_size=(5, 5),
+    conv2d1_nonlinearity=lasagne.nonlinearities.rectify,
+    conv2d1_W=lasagne.init.GlorotUniform(),  
+    # layer maxpool1
+    maxpool1_pool_size=(2, 2),    
+    # layer conv2d2
+    conv2d2_num_filters=32,
+    conv2d2_filter_size=(5, 5),
+    conv2d2_nonlinearity=lasagne.nonlinearities.rectify,
+    # layer maxpool2
+    maxpool2_pool_size=(2, 2),
+    # dropout1
+    dropout1_p=0.5,    
+    # dense
+    dense_num_units=256,
+    dense_nonlinearity=lasagne.nonlinearities.rectify,    
+    # dropout2
+    dropout2_p=0.5,    
+    # output
+    output_nonlinearity=lasagne.nonlinearities.softmax,
+    output_num_units=10,
+    # optimization method params
+    update=nesterov_momentum,
+    update_learning_rate=0.01,
+    update_momentum=0.9,
+    max_epochs=epoch,
+    verbose=1,
     )
     return net
 
@@ -89,7 +124,7 @@ def run(A_OR_B, CP_R=None, LNum=None):
     train, train_label = read_data(join(RUN_NAME, '{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'train')))
     test, test_label = read_data(join(RUN_NAME, '{0}_{1}_{2}.csv'.format(RUN_NAME, A_OR_B, 'test')))
     while True:
-        net = NN(EPOCH)
+        net = CNN(EPOCH)
         # load trained parameters
         if CP_R is not None:
             # measure CP approximate time
@@ -97,12 +132,9 @@ def run(A_OR_B, CP_R=None, LNum=None):
             if LNum is None:
                 global LN
                 LNum = LN
-            if LNum == -1: # copy all A
-                net.load_params_from(join(RUN_NAME, '{0}_{1}_net.pkl'.format(RUN_NAME, 'A')))
-            else:
-                net.load_CP_approx_params_from(join(RUN_NAME, '{0}_{1}_net.pkl'.format(RUN_NAME, 'A')), HN, LNum, CP_R=CP_R)
-                ed = time.time()
-                LOG += "CP_approximate_exetime: {0}s\n".format(ed-st)
+            net.load_params_from(join(RUN_NAME, '{0}_{1}_net.pkl'.format(RUN_NAME, 'A')))
+            ed = time.time()
+            LOG += "CP_approximate_exetime: {0}s\n".format(ed-st)
         # measure fitting time
         st = time.time()
         net.fit(train, train_label)
@@ -112,7 +144,8 @@ def run(A_OR_B, CP_R=None, LNum=None):
         n = len(pred)
         acc = 0
         for i in range(n):
-            acc = acc+1 if pred[i]==test_label[i] else acc
+            compare = 0 if pred[i]==test_label[i] else 1
+            acc = acc+1 if compare == 0 else acc
         accuracy = float(acc)/n
         LOG += "[{0}_{2}] acc = {1}\n".format(A_OR_B, accuracy, EXP_NAME)
         print('accuracy={0}'.format(accuracy))
@@ -130,10 +163,10 @@ def run(A_OR_B, CP_R=None, LNum=None):
 SPLIT_RATIO = 6.0/7
 NUM = None
 # neural configuration
-LN = 10 # layer number
-HN = 50 # hidden unit per layer
-ACC = 0.8
-EPOCH = 100
+LN = 9 # layer number
+HN = 0 # hidden unit per layer
+ACC = 0.75
+EPOCH = 10
 
 RUN_NAME = 'MLP_{0}LN_{1}HN'.format(LN,HN)
 if not os.path.exists(RUN_NAME):
@@ -143,9 +176,7 @@ if not os.path.exists(RUN_NAME):
 # logging
 f = open(join(RUN_NAME, 'log_{0}.txt'.format(RUN_NAME)), 'a+')
 A, B = [1,7,4,5,8], [2,3,6,0,9] # AB
-A, B = [2,3,6,0,9], [1,7,4,5,8] # BA
-
-
+# A, B = [2,3,6,0,9], [1,7,4,5,8] # BA
 gen_data(A, B)
 LOG += '---' * 9 + '\n'
 EXP_NAME = 'Baseline'
@@ -155,11 +186,6 @@ f.write(LOG)
 LOG = ""
 EXP_NAME = 'Baseline'
 net1 = run('B')
-LOG += '---' * 9 + '\n'
-f.write(LOG)
-LOG += ""
-EXP_NAME = 'B_Raw'
-net = run('B', CP_R=-1, LNum=-1)
 LOG += '---' * 9 + '\n'
 f.write(LOG)
 

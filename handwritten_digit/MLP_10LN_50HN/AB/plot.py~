@@ -24,10 +24,8 @@ def plot_acc(fin, fout):
     # baseline
     A_base_acc = re.findall('training_time: .*\n\[A_Baseline\] acc = (.*)', data)[-1]
     B_base_acc = re.findall('training_time: .*\n\[B_Baseline\] acc = (.*)', data)[-1]
-    B_base_raw_acc = re.findall('training_time: .*\n\[B_B_Raw\] acc = (.*)', data)[-1]
-    # A_acc, = plt.plot([0], [A_base_acc], marker='o', markersize=12, label='A baseline')
+    A_acc, = plt.plot([0], [A_base_acc], marker='o', markersize=12, label='A baseline')
     B_acc, = plt.plot([0], [B_base_acc], marker='o', markersize=12, label='B baseline')
-    B_raw_acc, = plt.plot([0], [B_base_raw_acc], marker='*', markersize=12, label='B (all layer of A)')
     # Low rank
     R = set([int(x) for x in re.findall('\[.*_(\d*)_rank1_.*\]', data)])
     L = set([int(x) for x in re.findall('\[.*_(\d*)_Layer\]', data)])
@@ -38,7 +36,8 @@ def plot_acc(fin, fout):
             acc = re.findall('\[B_{0}_rank1_{1}_Layer\] acc = (.*)'.format(r,l), data)[-1]
             x += [l]
             y += [acc]
-        plt.plot(x, y, marker='.', markersize=5, label='{0} Rank1'.format(r))
+        PLOT += [plt.plot(x, y, marker='.', markersize=5, label='{0} Rank1'.format(r))]
+    PLOT += [A_acc,B_acc]
     plt.title('Accuracy')
     plt.legend()
     plt.xlabel('#transfered layers')
@@ -50,13 +49,17 @@ def plot_time(fin, fout):
     plt.clf()
     with open(fin) as f:
         data = f.read()
+    # train, test information
+    A_train = re.findall('A\t(.*)\t', data)[0]
+    A_test = re.findall('A\t.*\t(.*)', data)[0]
+    B_train = re.findall('B\t(.*)\t', data)[0]
+    B_test = re.findall('B\t.*\t(.*)', data)[0]
+
     # baseline
     A_base_time = re.findall('training_time: (.*)s\n\[A_Baseline\] acc = .*', data)[-1]
     B_base_time = re.findall('training_time: (.*)s\n\[B_Baseline\] acc = .*', data)[-1]
-    B_base_raw_time = re.findall('training_time: (.*)s\n\[B_B_Raw\] acc = .*', data)[-1]
-    # A, = plt.plot([0], [A_base_time], marker='o', markersize=12, label='A baseline')
+    A, = plt.plot([0], [A_base_time], marker='o', markersize=12, label='A baseline')
     B, = plt.plot([0], [B_base_time], marker='o', markersize=12, label='B baseline')
-    B_raw, = plt.plot([0], [B_base_raw_time], marker='*', markersize=12, label='B (all layer of A)')
     # Low rank
     R = set([int(x) for x in re.findall('\[.*_(\d*)_rank1_.*\]', data)])
     L = set([int(x) for x in re.findall('\[.*_(\d*)_Layer\]', data)])
@@ -67,7 +70,8 @@ def plot_time(fin, fout):
             time = re.findall('training_time: (.*)s\n\[B_{0}_rank1_{1}_Layer\]'.format(r,l), data)[-1]
             x += [l]
             y += [time]
-        plt.plot(x, y, marker='.', markersize=5, label='{0} Rank1'.format(r))
+        PLOT += [plt.plot(x, y, marker='.', markersize=5, label='{0} Rank1'.format(r))]
+    PLOT += [A, B]
     plt.title('Training Time')
     plt.legend()
     plt.xlabel('#transfered layers')
@@ -86,10 +90,9 @@ def get_epoch(fname):
 def plot_epoch_tgt(fname, R, L):
     plt.clf()
     # Baseline
-    A, B, B_raw = get_epoch('A_Baseline.pkl'), get_epoch('B_Baseline.pkl'), get_epoch('B_B_Raw.pkl')
-    # plt.plot([0], [A], label='A Baseline', marker='o', markersize=12)
+    A, B = get_epoch('A_Baseline.pkl'), get_epoch('B_Baseline.pkl')
+    plt.plot([0], [A], label='A Baseline', marker='o', markersize=12)
     plt.plot([0], [B], label='B Baseline', marker='o', markersize=12)
-    plt.plot([0], [B_raw], label='B (all layers of A)', marker='*', markersize=12)
     # other
     for r in R:
         EPOCH = []
@@ -116,7 +119,7 @@ def plot_loss(fname, run):
     plt.ylabel('loss')
     plt.savefig('{0}.png'.format(run))
 
-def plot_acc_epoch(fname, run, baseA=None, baseB=None, baseBR=None):
+def plot_acc_epoch(fname, run, baseA=None, baseB=None):
     plt.clf()
     X = pd.read_pickle(fname)
     EPOCH = range(len(X))
@@ -126,8 +129,6 @@ def plot_acc_epoch(fname, run, baseA=None, baseB=None, baseBR=None):
         plt.plot(range(len(baseA)), baseA, label='A baseline', linestyle='-.')
     if baseB is not None:
         plt.plot(range(len(baseB)), baseB, label='B baseline', linestyle='-.')
-    if baseBR is not None:
-        plt.plot(range(len(baseBR)), baseBR, label='B (all layers of A)', linestyle='-.')
     plt.title(run)
     plt.legend()
     plt.xlabel('epoch')
@@ -138,20 +139,18 @@ def plot_acc_epoch(fname, run, baseA=None, baseB=None, baseBR=None):
 def plot_all(R, L):
     plt.clf()
     # Baseline
-    # X, XN = 'A_Baseline.pkl', 'A_baseline'
+    X, XN = 'A_Baseline.pkl', 'A_baseline'
     # plot_loss(X, XN)
-    # A = plot_acc_epoch(X, XN)
+    A = plot_acc_epoch(X, XN)
     X, XN = 'B_Baseline.pkl', 'B_baseline'
     # plot_loss(X, XN)
     B = plot_acc_epoch(X, XN)
-    X, XN = 'B_B_Raw.pkl', 'B_R-1'
-    B_raw = plot_acc_epoch(X, XN)
     # other
     for r in R:
         for l in L:
             X, XN = 'B_{0}_rank1_{1}_Layer.pkl'.format(r,l), 'B_{0}R_{1}L'.format(r,l)
             # plot_loss(X, XN)
-            plot_acc_epoch(X, XN, baseA=None, baseB=B, baseBR=B_raw)
+            plot_acc_epoch(X, XN, baseA=None, baseB=B)
 
 ACC = 0.9
 opts = parse_arg()

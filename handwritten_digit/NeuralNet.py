@@ -531,7 +531,7 @@ class NeuralNet(BaseEstimator):
             if np.isnan(avg_valid_loss):
                 break
             # cut on little improvement
-            if prev_acc is not None and np.abs(prev_acc-avg_valid_accuracy) < 1e-4:
+            if prev_acc is not None and np.abs(prev_acc-avg_valid_accuracy) < 1e-6:
                 break
             prev_acc = avg_valid_accuracy
             if self.custom_scores:
