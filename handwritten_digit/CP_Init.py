@@ -132,44 +132,15 @@ def run(A_OR_B, CP_R=None, LNum=None):
     return net
 
 # train vs test
-SPLIT_RATIO = 0.9
-NUM = None
+SPLIT_RATIO = 6.0/7
+NUM = 10
 # neural configuration
-LN = 10
-HN = 50
+LN = 10 # layer number
+HN = 50 # hidden unit per layer
 ACC = 0.7
-EPOCH = 200
+EPOCH = 35
 
-
-# RUN_NAME = 'rank'
-# # logging
-# f = open('log_{0}.txt'.format(RUN_NAME), 'a+')
-# A, B = [1,7,4,5,8], [2,3,6,0,9]
-# # gen_data(A, B)
-
-# LOG += '---' * 9 + '\n'
-# EXP_NAME = 'Baseline'
-# net1 = run('A')
-# LOG += '---' * 9 + '\n'
-# f.write(LOG)
-
-# LOG = ""
-# EXP_NAME = 'Baseline'
-# net1 = run('B')
-# LOG += '---' * 9 + '\n'
-# f.write(LOG)
-
-# LOG = ""
-# for i in range(1,10):
-#     EXP_NAME = '{0}-LowRank'.format(i)
-#     # transfer R low-rank approximation
-#     net2 = run('B', CP_R=i)
-#     LOG += '---' * 9 + '\n'
-#     f.write(LOG)
-#     LOG = ""
-
-
-RUN_NAME = 'LNum'
+RUN_NAME = 'MLP_{0}LN_{1}HN'.format(LN,HN)
 # logging
 f = open('log_{0}.txt'.format(RUN_NAME), 'a+')
 A, B = [1,7,4,5,8], [2,3,6,0,9]
@@ -186,8 +157,8 @@ LOG += '---' * 9 + '\n'
 f.write(LOG)
 
 LOG = ""
-for i in range(1,5):
-    for j in range(1,11):
+for i in range(1,3):
+    for j in range(1,LN):
         EXP_NAME = '{0}_rank1_{1}_Layer'.format(i, j)
         # transfer R low-rank approximation
         net2 = run('B', CP_R=i, LNum=j)

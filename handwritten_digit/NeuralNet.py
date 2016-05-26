@@ -613,7 +613,6 @@ class NeuralNet(BaseEstimator):
 
     # CP low-rank approximate by R rank-1 tensor
     def approx_CP_R(self, value, R):
-        print(value.ndim)
         if value.ndim < 2:
             return value
         T = dtensor(value)
@@ -651,22 +650,21 @@ class NeuralNet(BaseEstimator):
                 B += [b]
                 n += 1
         W, B = np.dstack(W), np.dstack(B)
-        print(W.shape)
-        print(B.shape)
-        CP_W = W if CP_R is None else self.approx_CP_R(W, CP_R)
-        CP_B = B if CP_R is None else self.approx_CP_R(B, CP_R)
-        print(W.shape)
-        print(B.shape)
+        CP_W = W if CP_R is None or LNum < 1 else self.approx_CP_R(W, CP_R)
+        CP_B = B if CP_R is None or LNum < 1 else self.approx_CP_R(B, CP_R)
         n = 0
         for key in Key:
             values = source[key]
             layer = self.layers_.get(key)
             if layer is not None:
-                if 'dense' in key and n < LNum: # transfer
-                    v1 = layer.get_params()
-                    v1[0].set_value(W[:,:,n].reshape((HN,HN)))
-                    v1[1].set_value(B[:,:,n].reshape(HN))
-                    n += 1
+                if 'dense' in key:
+                    if n < LNum: # tranfer
+                        v1 = layer.get_params()
+                        v1[0].set_value(W[:,:,n].reshape((HN,HN)))
+                        v1[1].set_value(B[:,:,n].reshape(HN))
+                        n += 1
+                    else: # random initialized
+                        pass
                 else:
                     for p1, p2v in zip(layer.get_params(), values):
                         shape1 = p1.get_value().shape
