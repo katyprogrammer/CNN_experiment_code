@@ -83,3 +83,11 @@ CP_approximate_exetime: 3.63866901398s
 training_time: 104.01829505s
 [B_2_rank1_9_Layer] acc = 0.924157303371
 ---------------------------
+CP_approximate_exetime: 6.96689105034s
+training_time: 163.334795952s
+[B_1_rank1_10_Layer] acc = 0.936797752809
+---------------------------
+CP_approximate_exetime: 4.35092496872s
+training_time: 163.121531963s
+[B_2_rank1_10_Layer] acc = 0.936797752809
+---------------------------

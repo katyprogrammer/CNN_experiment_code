@@ -130,8 +130,8 @@ def run(A_OR_B, CP_R=None, LNum=None):
 SPLIT_RATIO = 6.0/7
 NUM = None
 # neural configuration
-LN = 10 # layer number
-HN = 50 # hidden unit per layer
+LN = 3 # layer number
+HN = 500 # hidden unit per layer
 ACC = 0.8
 EPOCH = 100
 
@@ -146,26 +146,26 @@ A, B = [1,7,4,5,8], [2,3,6,0,9] # AB
 A, B = [2,3,6,0,9], [1,7,4,5,8] # BA
 
 
-gen_data(A, B)
-LOG += '---' * 9 + '\n'
-EXP_NAME = 'Baseline'
-net1 = run('A')
-LOG += '---' * 9 + '\n'
-f.write(LOG)
-LOG = ""
-EXP_NAME = 'Baseline'
-net1 = run('B')
-LOG += '---' * 9 + '\n'
-f.write(LOG)
-LOG += ""
-EXP_NAME = 'B_Raw'
-net = run('B', CP_R=-1, LNum=-1)
-LOG += '---' * 9 + '\n'
-f.write(LOG)
+# gen_data(A, B)
+# LOG += '---' * 9 + '\n'
+# EXP_NAME = 'Baseline'
+# net1 = run('A')
+# LOG += '---' * 9 + '\n'
+# f.write(LOG)
+# LOG = ""
+# EXP_NAME = 'Baseline'
+# net1 = run('B')
+# LOG += '---' * 9 + '\n'
+# f.write(LOG)
+# LOG += ""
+# EXP_NAME = 'B_Raw'
+# net = run('B', CP_R=-1, LNum=-1)
+# LOG += '---' * 9 + '\n'
+# f.write(LOG)
 
 LOG = ""
 for i in range(1,3):
-    for j in range(1,LN):
+    for j in range(LN,LN+1):
         EXP_NAME = '{0}_rank1_{1}_Layer'.format(i, j)
         # transfer R low-rank approximation
         net2 = run('B', CP_R=i, LNum=j)

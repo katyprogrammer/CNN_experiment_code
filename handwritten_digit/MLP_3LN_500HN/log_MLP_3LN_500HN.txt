@@ -1,0 +1,40 @@
+	train	test
+A	29884	4984
+B	30112	5020
+---------------------------
+training_time: 628.744035006s
+[A_Baseline] acc = 0.96227929374
+---------------------------
+training_time: 447.022697926s
+[B_Baseline] acc = 0.956972111554
+---------------------------
+training_time: 447.022697926s
+[B_Baseline] acc = 0.956972111554
+---------------------------
+training_time: 517.499449968s
+[B_B_Raw] acc = 0.952788844622
+---------------------------
+CP_approximate_exetime: 1.4882349968s
+training_time: 534.07662797s
+[B_1_rank1_1_Layer] acc = 0.957370517928
+---------------------------
+CP_approximate_exetime: 1.50501203537s
+training_time: 712.019165039s
+[B_1_rank1_2_Layer] acc = 0.961553784861
+---------------------------
+CP_approximate_exetime: 1.66515302658s
+training_time: 637.68482089s
+[B_2_rank1_1_Layer] acc = 0.961354581673
+---------------------------
+CP_approximate_exetime: 1.82248210907s
+training_time: 443.120606899s
+[B_2_rank1_2_Layer] acc = 0.952788844622
+---------------------------
+CP_approximate_exetime: 7.47873592377s
+training_time: 582.224156141s
+[B_1_rank1_3_Layer] acc = 0.952788844622
+---------------------------
+CP_approximate_exetime: 2.26325488091s
+training_time: 555.889159918s
+[B_2_rank1_3_Layer] acc = 0.952788844622
+---------------------------
