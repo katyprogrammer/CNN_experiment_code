@@ -5,7 +5,7 @@ from nolearn.lasagne import TrainSplit
 import theano.tensor as T
 import matplotlib.pyplot as plt
 from lasagne.layers import DenseLayer, InputLayer
-from lasagne.updates import nesterov_momentum
+from lasagne.updates import nesterov_momentum, adagrad
 from NeuralNet import NeuralNet
 import theano.sparse as S
 import scipy.sparse as Sp
@@ -62,8 +62,8 @@ def read_data(filename):
     tgt = cPickle.load(open('{0}_tgt.pkl'.format(filename), 'r'))
     global LEN
     LEN = data.shape[1]
-    return data, tgt
-    
+    return data.todense().reshape((-1,LEN)), tgt.astype(np.uint8)
+
 
 # training
 def control_layer_num(n, l):
@@ -73,13 +73,13 @@ def control_layer_num(n, l):
     return tl
 
 def NN(epoch, custom_regularizor=None):
-    l = InputLayer(name='input', shape=(None,1,1,LEN))
+    l = InputLayer(name='input', shape=(None,LEN))
     l = DenseLayer(l, name='input_1', num_units=HN, nonlinearity=lasagne.nonlinearities.rectify)
     l = control_layer_num(LN, l)
     l = DenseLayer(l, name='output', num_units=20, nonlinearity=lasagne.nonlinearities.softmax)
     net = NeuralNet(l,
                     update = nesterov_momentum,
-                    update_learning_rate = 1e-5,
+                    update_learning_rate = 1e-6,
                     update_momentum = 0.9,
                     max_epochs = epoch,
                     verbose = 1,
@@ -112,7 +112,8 @@ def run(A_OR_B, CP_R=None, LNum=None):
                 LOG += "CP_approximate_exetime: {0}s\n".format(ed-st)
         # measure fitting time
         st = time.time()
-        net.fit(train.todense(), train_label)
+        # indata dimension issue
+        net.fit(train, train_label)
         ed = time.time()
         LOG += "training_time: {0}s\n".format(ed-st)
         pred = net.predict(test)
@@ -138,7 +139,7 @@ SPLIT_RATIO = 6.0/7
 NUM = None
 # neural configuration
 LN = 3 # layer number
-HN = 50 # hidden unit per layer
+HN = 1000 # hidden unit per layer
 ACC = 0.8
 EPOCH = 100
 
@@ -149,11 +150,10 @@ if not os.path.exists(RUN_NAME):
 
 # logging
 f = open(join(RUN_NAME, 'log_{0}.txt'.format(RUN_NAME)), 'a+')
-A, B = [1,7,4,5,8], [2,3,6,0,9] # AB
-A, B = [2,3,6,0,9], [1,7,4,5,8] # BA
+A, B = [1,7,4,5,8,11,17,14,18,15], [2,3,6,0,9,12,13,16,10,19] # AB
 
 
-#gen_data(A, B)
+gen_data(A, B)
 LOG += '---' * 9 + '\n'
 EXP_NAME = 'Baseline'
 net1 = run('A')

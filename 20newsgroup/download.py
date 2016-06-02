@@ -6,7 +6,8 @@ from pprint import pprint
 
 
 newsgroups = fetch_20newsgroups(subset='all')
-hasher = HashingVectorizer(n_features=100)
+# experiment on reasonable input
+hasher = HashingVectorizer(n_features=10000)
 vectors = hasher.fit_transform(newsgroups.data)
 
 target = newsgroups.target

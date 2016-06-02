@@ -87,7 +87,7 @@ class LegacyTrainTestSplit(object):  # BBB
     def __call__(self, X, y, net):
         return net.train_test_split(X, y, self.eval_size)
 
-        
+
 def objective(layers,
               loss_function,
               target,
@@ -103,7 +103,7 @@ def objective(layers,
     network_output = get_output(
         output_layer, deterministic=deterministic, **get_output_kw)
     loss = aggregate(loss_function(network_output, target))
-    
+
     if custom_regularizor is not None:
         loss += custom_regularizor(layers)
     if l1:
@@ -215,7 +215,7 @@ class NeuralNet(BaseEstimator):
 
         if isinstance(layers, Layer):
             layers = _list([layers])
-            
+
         self.layers = layers
         self.update = update
         self.objective = objective
@@ -418,7 +418,7 @@ class NeuralNet(BaseEstimator):
         #d3v.d3viz(loss_train, 'plot/obj_loss.html')
         grads = theano.grad(loss_train, all_params)
         #d3v.d3viz(grads, 'plot/grad.html')
-        
+
         for idx, param in enumerate(all_params):
             grad_scale = getattr(param.tag, 'grad_scale', 1)
             if grad_scale != 1:
@@ -555,7 +555,7 @@ class NeuralNet(BaseEstimator):
             if np.isnan(avg_valid_loss):
                 break
             # cut on little improvement
-            if prev_acc is not None and np.abs(prev_acc-avg_valid_accuracy) < 1e-6:
+            if prev_acc is not None and np.abs(prev_acc-avg_valid_accuracy) < 1e-7:
                 break
             prev_acc = avg_valid_accuracy
             if self.custom_scores:
@@ -569,7 +569,7 @@ class NeuralNet(BaseEstimator):
                 break
         for func in on_training_finished:
             func(self, self.train_history_)
-            
+
 
     @staticmethod
     def apply_batch_func(func, Xb, yb=None):
