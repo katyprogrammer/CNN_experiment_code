@@ -1,15 +1,19 @@
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import HashingVectorizer
 import cPickle
-from os.path import join
+from os.path import join, exists
+import os
 from pprint import pprint
+
+if not exists('train'):
+    os.makedirs('train')
 
 
 newsgroups = fetch_20newsgroups(subset='all')
 # experiment on reasonable input
 hasher = HashingVectorizer(n_features=10000)
 vectors = hasher.fit_transform(newsgroups.data)
-
+    
 target = newsgroups.target
 l = len(target)
 for i in range(20):

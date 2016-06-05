@@ -13,6 +13,7 @@ import os
 from os.path import join
 import time
 import cPickle
+from ttlayer import TTLayer
 
 LOG = ""
 LEN = None
@@ -74,7 +75,8 @@ def control_layer_num(n, l):
 
 def NN(epoch, custom_regularizor=None):
     l = InputLayer(name='input', shape=(None,LEN))
-    l = DenseLayer(l, name='input_1', num_units=HN, nonlinearity=lasagne.nonlinearities.rectify)
+    l = TTLayer(l, tt_input_shape=[10,10,10,10], tt_output_shape=[10,10,10,10], tt_ranks=[1,3,3,3,1], name='input_1', nonlinearity=lasagne.nonlinearities.rectify)
+    # l = DenseLayer(l, name='input_1', num_units=HN, nonlinearity=lasagne.nonlinearities.rectify)
     l = control_layer_num(LN, l)
     l = DenseLayer(l, name='output', num_units=20, nonlinearity=lasagne.nonlinearities.softmax)
     net = NeuralNet(l,
@@ -138,8 +140,8 @@ def run(A_OR_B, CP_R=None, LNum=None):
 SPLIT_RATIO = 6.0/7
 NUM = None
 # neural configuration
-LN = 3 # layer number
-HN = 1000 # hidden unit per layer
+LN = 5 # layer number
+HN = 50 # hidden unit per layer
 ACC = 0.8
 EPOCH = 100
 
