@@ -25,26 +25,41 @@ from ttlayer import TTLayer
 # This is just some way of getting the 20Newsgroups dataset from an online location
 # and loading it into numpy arrays. It doesn't involve Lasagne at all.
 
-ROWN = 10000
+ROWN, BATCHN = None, None
 HashN = 1000
-BATCHN = ROWN / 20
 isDownload = False
 
 def load_dataset():
     def download_save_by_category():
         # download 20newsgroups
         newsgroups = fetch_20newsgroups(subset='all')
-        data = newsgroups.data[:ROWN]
+        global ROWN
+        ROWN = len(newsgroups.target)
+        global BATCHN
+        BATCHN = ROWN / 20
+        global HashN
+        first = True
         TfIdfVec = TfidfVectorizer()
-        vec = TfIdfVec.fit_transform(data) # in scipy.sparse.csr_matrix format
         lda = LinearDiscriminantAnalysis(n_components=HashN)
-        target =  newsgroups.target[:ROWN]
-        vectors = Sp.csr_matrix(lda.fit(vec.todense(), target).transform(vec.todense()))
+        vectors = None
+        for i in range(21):
+            data = newsgroups.data[i*BATCHN:(i+1)*BATCHN]
+            if first:
+                TfIdfVec.fit(data)
+                first = False
+                vec = TfIdfVec.transform(data) # in scipy.sparse.csr_matrix format
+                target =  newsgroups.target[i*BATCHN:(i+1)*BATCHN]
+                lda.fit(vec.todense(), target)
+                vectors = lda.transform(vec.todense())
+            else:
+                vec = TfIdfVec.transform(data) # in scipy.sparse.csr_matrix format
+                target =  newsgroups.target[i*BATCHN:(i+1)*BATCHN]
+                vectors = np.vstack([vectors, lda.transform(vec.todense())])
+        target = newsgroups.target
         # feature hashing
         # hasher = HashingVectorizer(n_features=HashN)
         # vectors = hasher.fit_transform(newsgroups.data)
         # target = newsgroups.target
-        global HashN
         HashN = vectors.shape[1]
 
         if not exists('train'):
@@ -73,7 +88,7 @@ def load_dataset():
         train = train[split:]
         valid_tgt = train_tgt[:split]
         train_tgt = train_tgt[split:]
-        return train, valid, test, train_tgt, valid_tgt, test_tgt
+        return Sp.csr_matrix(train), Sp.csr_matrix(valid), Sp.csr_matrix(test), train_tgt, valid_tgt, test_tgt
 
     def get_classes(classes):
         train, valid, test, train_tgt, valid_tgt, test_tgt = None, None, None, None, None, None
