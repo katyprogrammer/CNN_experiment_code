@@ -25,9 +25,9 @@ from ttlayer import TTLayer
 # This is just some way of getting the 20Newsgroups dataset from an online location
 # and loading it into numpy arrays. It doesn't involve Lasagne at all.
 
-ROWN = 250
+ROWN = 10000
 HashN = 1000
-BATCHN = 5
+BATCHN = ROWN / 20
 isDownload = False
 
 def load_dataset():
