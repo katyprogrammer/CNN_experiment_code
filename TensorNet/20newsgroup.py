@@ -25,23 +25,27 @@ from ttlayer import TTLayer
 # This is just some way of getting the 20Newsgroups dataset from an online location
 # and loading it into numpy arrays. It doesn't involve Lasagne at all.
 
+ROWN = 250
 HashN = 1000
+BATCHN = 5
 isDownload = False
 
 def load_dataset():
     def download_save_by_category():
         # download 20newsgroups
         newsgroups = fetch_20newsgroups(subset='all')
-        data = newsgroups.data[:100]
+        data = newsgroups.data[:ROWN]
         TfIdfVec = TfidfVectorizer()
-        vec = TfIdfVec.fit_transform(data)
+        vec = TfIdfVec.fit_transform(data) # in scipy.sparse.csr_matrix format
         lda = LinearDiscriminantAnalysis(n_components=HashN)
-        target =  newsgroups.target[:100]
-        vectors = lda.fit(vec.todense(), target).transform(vec.todense())
+        target =  newsgroups.target[:ROWN]
+        vectors = Sp.csr_matrix(lda.fit(vec.todense(), target).transform(vec.todense()))
         # feature hashing
         # hasher = HashingVectorizer(n_features=HashN)
         # vectors = hasher.fit_transform(newsgroups.data)
         # target = newsgroups.target
+        global HashN
+        HashN = vectors.shape[1]
 
         if not exists('train'):
             os.makedirs('train')
@@ -76,14 +80,17 @@ def load_dataset():
         for digit in classes:
             tr, v, te, trt, vt, tet = read_and_split('train/{0}.pkl'.format(digit), digit)
             if train is None:
-                train, valid, test, train_tgt, valid_tgt, test_tgt = Sp.vstack(tr), Sp.vstack(v), Sp.vstack(te), trt, vt, tet
+                train, train_tgt = (Sp.vstack(tr), trt) if tr is not None and len(trt)>0 else (train, train_tgt)
             else:
-                train = Sp.vstack([train, Sp.vstack(tr)])
-                valid = Sp.vstack([valid, Sp.vstack(v)])
-                test = Sp.vstack([test, Sp.vstack(te)])
-                train_tgt += trt
-                valid_tgt += vt
-                test_tgt += tet
+                train, train_tgt = (Sp.vstack([train, Sp.vstack(tr)]), train_tgt+trt) if tr is not None and len(trt)>0 else (train, train_tgt)
+            if valid is None:
+                valid, valid_tgt = (Sp.vstack(v), vt) if v is not None and len(vt)>0 else (valid, valid_tgt)
+            else:
+                valid, valid_tgt = (Sp.vstack([valid, Sp.vstack(v)]), valid_tgt+vt) if v is not None and len(vt)>0 else (valid, valid_tgt)
+            if test is None:
+                test, test_tgt = (Sp.vstack(te), tet) if te is not None and len(tet)>0 else (test, test_tgt)
+            else:
+                test, test_tgt = (Sp.vstack([test, Sp.vstack(te)]), test_tgt+tet) if te is not None and len(tet)>0 else (test, test_tgt)
         return train, valid, test, np.array(train_tgt), np.array(valid_tgt), np.array(test_tgt)
 
     if not isDownload:
@@ -105,8 +112,8 @@ def build_mlp(input_var=None):
 
     # Build a TT-layer with 800 output units and all the ranks equal 3.
     l_hid1 = TTLayer(
-            l_in, tt_input_shape=[10,10,10], tt_output_shape=[10,10,10],
-            tt_ranks=[1, 5, 5, 1],
+            l_in, tt_input_shape=[HashN], tt_output_shape=[HashN],
+            tt_ranks=[1, 1],
             nonlinearity=lasagne.nonlinearities.rectify)
 
 
@@ -115,7 +122,7 @@ def build_mlp(input_var=None):
             l_hid1, num_units=800,
             nonlinearity=lasagne.nonlinearities.tanh)
 
-    # Finally, we'll add the fully-connected output layer, of 10 softmax units:
+    # Finally, we'll add the fully-connected output layer, of 20 softmax units:
     l_out = lasagne.layers.DenseLayer(
             l_hid2, num_units=20,
             nonlinearity=lasagne.nonlinearities.softmax)
@@ -139,10 +146,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
         indices = np.arange(len(inputs))
         np.random.shuffle(indices)
     for start_idx in range(0, len(inputs) - batchsize + 1, batchsize):
-        if shuffle:
-            excerpt = indices[start_idx:start_idx + batchsize]
-        else:
-            excerpt = slice(start_idx, start_idx + batchsize)
+        excerpt = indices[start_idx:start_idx + batchsize] if shuffle else slice(start_idx, start_idx + batchsize)
         yield inputs[excerpt], targets[excerpt]
 
 
@@ -156,6 +160,7 @@ def main(num_epochs=500):
     print("Loading data...")
     X_train, X_val, X_test, y_train, y_val, y_test = load_dataset()
     X_train, X_val, X_test = X_train.todense(), X_val.todense(), X_test.todense()
+    print('#train = {0}, #test = {1}, #valid = {2}'.format(len(y_train), len(y_test), len(y_val)))
     # Prepare Theano variables for inputs and targets
     input_var = T.matrix('inputs')
     target_var = T.lvector('targets')
@@ -204,7 +209,7 @@ def main(num_epochs=500):
         train_err = 0
         train_batches = 0
         start_time = time.time()
-        for batch in iterate_minibatches(X_train, y_train, 500, shuffle=True):
+        for batch in iterate_minibatches(X_train, y_train, BATCHN, shuffle=True):
             inputs, targets = batch
             train_err += train_fn(inputs, targets)
             train_batches += 1
@@ -213,7 +218,7 @@ def main(num_epochs=500):
         val_err = 0
         val_acc = 0
         val_batches = 0
-        for batch in iterate_minibatches(X_val, y_val, 500, shuffle=False):
+        for batch in iterate_minibatches(X_val, y_val, BATCHN, shuffle=False):
             inputs, targets = batch
             err, acc = val_fn(inputs, targets)
             val_err += err
@@ -232,7 +237,7 @@ def main(num_epochs=500):
     test_err = 0
     test_acc = 0
     test_batches = 0
-    for batch in iterate_minibatches(X_test, y_test, 500, shuffle=False):
+    for batch in iterate_minibatches(X_test, y_test, BATCHN, shuffle=False):
         inputs, targets = batch
         err, acc = val_fn(inputs, targets)
         test_err += err
