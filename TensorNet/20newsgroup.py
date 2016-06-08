@@ -11,7 +11,8 @@ import cPickle
 import numpy as np
 import scipy.sparse as Sp
 from sklearn.datasets import fetch_20newsgroups
-from sklearn.feature_extraction.text import HashingVectorizer
+from sklearn.feature_extraction.text import HashingVectorizer, TfidfTransformer
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 import theano
 import theano.tensor as T
 
@@ -24,17 +25,21 @@ from ttlayer import TTLayer
 # This is just some way of getting the 20Newsgroups dataset from an online location
 # and loading it into numpy arrays. It doesn't involve Lasagne at all.
 
-HashN = 10000
-isDownload = True
+HashN = 1000
+isDownload = False
 
 def load_dataset():
     def download_save_by_category():
         # download 20newsgroups
         newsgroups = fetch_20newsgroups(subset='all')
+        TfIdfVec = TfidfTransformer()
+        vec = TfIdfVec.fit_transform(newsgroups.data)
+        lda = LinearDiscriminantAnalysis(n_components=HashN)
+        vectors, target = lda.fit(vec, newsgroups.target).transform(vec)
         # feature hashing
-        hasher = HashingVectorizer(n_features=HashN)
-        vectors = hasher.fit_transform(newsgroups.data)
-        target = newsgroups.target
+        # hasher = HashingVectorizer(n_features=HashN)
+        # vectors = hasher.fit_transform(newsgroups.data)
+        # target = newsgroups.target
 
         if not exists('train'):
             os.makedirs('train')
@@ -91,21 +96,22 @@ def load_dataset():
 
 def build_mlp(input_var=None):
     # Input layer, specifying the expected input shape of the network
-    # (unspecified batchsize, 1 channel, 28 rows and 28 columns) and
+    # (unspecified batchsize, 1 channel, 1 row, HashN columns) and
     # linking it to the given Theano variable `input_var`, if any:
     l_in = lasagne.layers.InputLayer(shape=(None, HashN),
                                      input_var=input_var)
 
     # Build a TT-layer with 800 output units and all the ranks equal 3.
     l_hid1 = TTLayer(
-            l_in, tt_input_shape=[4, 7, 4, 7], tt_output_shape=[5, 5, 8, 4],
-            tt_ranks=[1, 3, 3, 3, 1],
+            l_in, tt_input_shape=[10,10,10], tt_output_shape=[10,10,10],
+            tt_ranks=[1, 5, 5, 1],
             nonlinearity=lasagne.nonlinearities.rectify)
+    
 
     # Another 800-unit layer:
     l_hid2 = lasagne.layers.DenseLayer(
             l_hid1, num_units=800,
-            nonlinearity=lasagne.nonlinearities.rectify)
+            nonlinearity=lasagne.nonlinearities.tanh)
 
     # Finally, we'll add the fully-connected output layer, of 10 softmax units:
     l_out = lasagne.layers.DenseLayer(
@@ -146,11 +152,11 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
 def main(num_epochs=500):
     # Load the dataset
     print("Loading data...")
-    X_train, X_valid, X_test, y_train, y_val, y_test = load_dataset()
-
+    X_train, X_val, X_test, y_train, y_val, y_test = load_dataset()
+    X_train, X_val, X_test = X_train.todense(), X_val.todense(), X_test.todense()
     # Prepare Theano variables for inputs and targets
-    input_var = T.tensor4('inputs')
-    target_var = T.ivector('targets')
+    input_var = T.matrix('inputs')
+    target_var = T.lvector('targets')
 
     # Create neural network model.
     print("Building model and compiling functions...")
@@ -168,7 +174,7 @@ def main(num_epochs=500):
     # Descent (SGD) with Nesterov momentum, but Lasagne offers plenty more.
     params = lasagne.layers.get_all_params(network, trainable=True)
     updates = lasagne.updates.nesterov_momentum(
-            loss, params, learning_rate=0.01, momentum=0.9)
+            loss, params, learning_rate=0.001, momentum=0.9)
 
     # Create a loss expression for validation/testing. The crucial difference
     # here is that we do a deterministic forward pass through the network,
