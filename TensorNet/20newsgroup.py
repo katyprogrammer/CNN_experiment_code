@@ -11,7 +11,7 @@ import cPickle
 import numpy as np
 import scipy.sparse as Sp
 from sklearn.datasets import fetch_20newsgroups
-from sklearn.feature_extraction.text import HashingVectorizer, TfidfTransformer
+from sklearn.feature_extraction.text import HashingVectorizer, TfidfVectorizer
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 import theano
 import theano.tensor as T
@@ -32,10 +32,12 @@ def load_dataset():
     def download_save_by_category():
         # download 20newsgroups
         newsgroups = fetch_20newsgroups(subset='all')
-        TfIdfVec = TfidfTransformer()
-        vec = TfIdfVec.fit_transform(newsgroups.data)
+        data = newsgroups.data[:100]
+        TfIdfVec = TfidfVectorizer()
+        vec = TfIdfVec.fit_transform(data)
         lda = LinearDiscriminantAnalysis(n_components=HashN)
-        vectors, target = lda.fit(vec, newsgroups.target).transform(vec)
+        target =  newsgroups.target[:100]
+        vectors = lda.fit(vec.todense(), target).transform(vec.todense())
         # feature hashing
         # hasher = HashingVectorizer(n_features=HashN)
         # vectors = hasher.fit_transform(newsgroups.data)
@@ -43,7 +45,7 @@ def load_dataset():
 
         if not exists('train'):
             os.makedirs('train')
-        
+
         for i in range(20):
             x = []
             for j in range(len(target)):
@@ -68,7 +70,7 @@ def load_dataset():
         valid_tgt = train_tgt[:split]
         train_tgt = train_tgt[split:]
         return train, valid, test, train_tgt, valid_tgt, test_tgt
-    
+
     def get_classes(classes):
         train, valid, test, train_tgt, valid_tgt, test_tgt = None, None, None, None, None, None
         for digit in classes:
@@ -82,7 +84,7 @@ def load_dataset():
                 train_tgt += trt
                 valid_tgt += vt
                 test_tgt += tet
-        return train, valid, test, np.array(train_tgt), np.array(valid_tgt), np.array(test_tgt)            
+        return train, valid, test, np.array(train_tgt), np.array(valid_tgt), np.array(test_tgt)
 
     if not isDownload:
         download_save_by_category()
@@ -106,7 +108,7 @@ def build_mlp(input_var=None):
             l_in, tt_input_shape=[10,10,10], tt_output_shape=[10,10,10],
             tt_ranks=[1, 5, 5, 1],
             nonlinearity=lasagne.nonlinearities.rectify)
-    
+
 
     # Another 800-unit layer:
     l_hid2 = lasagne.layers.DenseLayer(
