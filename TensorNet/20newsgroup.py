@@ -12,7 +12,7 @@ import numpy as np
 import scipy.sparse as Sp
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import HashingVectorizer, TfidfVectorizer
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.decomposition import TruncatedSVD
 import theano
 import theano.tensor as T
 
@@ -25,8 +25,9 @@ from ttlayer import TTLayer
 # This is just some way of getting the 20Newsgroups dataset from an online location
 # and loading it into numpy arrays. It doesn't involve Lasagne at all.
 
+BATCH_EPOCH = 20
 ROWN, BATCHN = None, None
-HashN = 1000
+HashN = 100
 isDownload = False
 
 def load_dataset():
@@ -36,26 +37,17 @@ def load_dataset():
         global ROWN
         ROWN = len(newsgroups.target)
         global BATCHN
-        BATCHN = ROWN / 20
+        BATCHN = ROWN / BATCH_EPOCH
         global HashN
         first = True
-        TfIdfVec = TfidfVectorizer()
-        lda = LinearDiscriminantAnalysis(n_components=HashN)
-        vectors = None
-        for i in range(21):
-            data = newsgroups.data[i*BATCHN:(i+1)*BATCHN]
-            if first:
-                TfIdfVec.fit(data)
-                first = False
-                vec = TfIdfVec.transform(data) # in scipy.sparse.csr_matrix format
-                target =  newsgroups.target[i*BATCHN:(i+1)*BATCHN]
-                lda.fit(vec.todense(), target)
-                vectors = lda.transform(vec.todense())
-            else:
-                vec = TfIdfVec.transform(data) # in scipy.sparse.csr_matrix format
-                target =  newsgroups.target[i*BATCHN:(i+1)*BATCHN]
-                vectors = np.vstack([vectors, lda.transform(vec.todense())])
+        TfIdfVec = TfidfVectorizer(sublinear_tf=True, max_df=0.5,
+                                 stop_words='english')
+        vectors = TfIdfVec.fit_transform(newsgroups.data) # in scipy.sparse.csr_matrix format
+        lda = TruncatedSVD(n_components=HashN) # sparse linear discriminant analysis
+        vectors = lda.fit_transform(vectors, newsgroups.target)
+        
         target = newsgroups.target
+        print('[LDA] transformed dimension={0}'.format(vectors.shape[1]))
         # feature hashing
         # hasher = HashingVectorizer(n_features=HashN)
         # vectors = hasher.fit_transform(newsgroups.data)
@@ -125,17 +117,16 @@ def build_mlp(input_var=None):
     l_in = lasagne.layers.InputLayer(shape=(None, HashN),
                                      input_var=input_var)
 
-    # Build a TT-layer with 800 output units and all the ranks equal 3.
-    l_hid1 = TTLayer(
-            l_in, tt_input_shape=[HashN], tt_output_shape=[HashN],
-            tt_ranks=[1, 1],
-            nonlinearity=lasagne.nonlinearities.rectify)
-
+    # Build a TT-layer
+    # l_hid1 = TTLayer(
+    #         l_in, tt_input_shape=[HashN], tt_output_shape=[HashN],
+    #         tt_ranks=[1, 1],
+    #         nonlinearity=lasagne.nonlinearities.tanh)
 
     # Another 800-unit layer:
     l_hid2 = lasagne.layers.DenseLayer(
-            l_hid1, num_units=800,
-            nonlinearity=lasagne.nonlinearities.tanh)
+            l_in, num_units=800,
+            nonlinearity=None)
 
     # Finally, we'll add the fully-connected output layer, of 20 softmax units:
     l_out = lasagne.layers.DenseLayer(
@@ -196,7 +187,7 @@ def main(num_epochs=500):
     # Descent (SGD) with Nesterov momentum, but Lasagne offers plenty more.
     params = lasagne.layers.get_all_params(network, trainable=True)
     updates = lasagne.updates.nesterov_momentum(
-            loss, params, learning_rate=0.001, momentum=0.9)
+            loss, params, learning_rate=5e-4, momentum=0.9)
 
     # Create a loss expression for validation/testing. The crucial difference
     # here is that we do a deterministic forward pass through the network,
