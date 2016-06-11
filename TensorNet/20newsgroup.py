@@ -24,10 +24,14 @@ from ttlayer import TTLayer
 training A:
 # training with 5000 epoch
 # save trained params to A.pkl
-$ python 20newsgroup.py -r A -d A.pkl -e 5000
+$ python 20newsgroup.py -r A -d A.pkl -e 5000 > A.txt
 training B:
 # load trained params from A.pkl
-python 20newsgroup.py -r B -l A.pkl -d B.pkl -e 5000
+python 20newsgroup.py -r B -l A.pkl -d B.pkl -e 5000 > B.txt
+
+A.txt, B.txt will contain training information(training error, validation error, validation accuracy)
+$ python plot.py -i A.txt -o A
+$ python plot.py -i B.txt -o B
 '''
 
 def parse_arg():
