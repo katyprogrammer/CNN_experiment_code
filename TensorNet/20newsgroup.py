@@ -21,11 +21,15 @@ import lasagne
 from ttlayer import TTLayer
 
 '''
-training A:
+# tuning good hyperparameter using all category
+training all:
+$ python 20newsgroup.py -e 5000 > all.txt
+
+training domain A(src)
 # training with 5000 epoch
 # save trained params to A.pkl
 $ python 20newsgroup.py -r A -d A.pkl -e 5000 > A.txt
-training B:
+training domain B(tgt)
 # load trained params from A.pkl
 python 20newsgroup.py -r B -l A.pkl -d B.pkl -e 5000 > B.txt
 
