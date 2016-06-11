@@ -27,7 +27,7 @@ from ttlayer import TTLayer
 
 BATCH_EPOCH = 20
 ROWN, BATCHN = None, None
-HashN = 100
+HashN = 200
 isDownload = False
 
 def load_dataset():
@@ -187,7 +187,7 @@ def main(num_epochs=500):
     # Descent (SGD) with Nesterov momentum, but Lasagne offers plenty more.
     params = lasagne.layers.get_all_params(network, trainable=True)
     updates = lasagne.updates.nesterov_momentum(
-            loss, params, learning_rate=5e-4, momentum=0.9)
+            loss, params, learning_rate=1e-3, momentum=0.9)
 
     # Create a loss expression for validation/testing. The crucial difference
     # here is that we do a deterministic forward pass through the network,
