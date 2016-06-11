@@ -7,6 +7,7 @@ import os
 from os.path import exists, join
 import time
 import cPickle
+import optparse
 
 import numpy as np
 import scipy.sparse as Sp
@@ -15,22 +16,40 @@ from sklearn.feature_extraction.text import HashingVectorizer, TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
 import theano
 import theano.tensor as T
-
 import lasagne
 
 from ttlayer import TTLayer
 
+'''
+training A:
+# training with 5000 epoch
+# save trained params to A.pkl
+$ python 20newsgroup.py -r A -d A.pkl -e 5000
+training B:
+# load trained params from A.pkl
+python 20newsgroup.py -r B -l A.pkl -d B.pkl -e 5000
+'''
 
-# ################## Download and prepare the 20Newsgroups dataset ##################
-# This is just some way of getting the 20Newsgroups dataset from an online location
-# and loading it into numpy arrays. It doesn't involve Lasagne at all.
+def parse_arg():
+    parser = optparse.OptionParser('usage%prog [-l load parameterf from] [-d dump parameter to] [-e epoch] [-r src or tgt]')
+    parser.add_option('-l', dest='fin')
+    parser.add_option('-d', dest='fout')
+    parser.add_option('-e', dest='epoch')
+    parser.add_option('-r', dest='A_B')
+    (options, args) = parser.parse_args()
+    return options
+
+# src
+A = np.array(range(10))
+# tgt
+B = 10+A
 
 BATCH_EPOCH = 20
 ROWN, BATCHN = None, None
 HashN = 200
-isDownload = False
+isDownload = True
 
-def load_dataset():
+def load_dataset(A_B):
     def download_save_by_category():
         # download 20newsgroups
         newsgroups = fetch_20newsgroups(subset='all')
@@ -63,6 +82,7 @@ def load_dataset():
                 if target[j] == i:
                     x.append(vectors[j])
             cPickle.dump(x, open(join('train', '{0}.pkl'.format(i)), 'w+'))
+    
     def read_and_split(filepath, digit, NUM=None, test_ratio=0.2, valid_ratio=0.2):
         data = cPickle.load(open(filepath, 'r'))
         # instance number to use
@@ -82,7 +102,7 @@ def load_dataset():
         train_tgt = train_tgt[split:]
         return Sp.csr_matrix(train), Sp.csr_matrix(valid), Sp.csr_matrix(test), train_tgt, valid_tgt, test_tgt
 
-    def get_classes(classes):
+    def get_classes(classes):        
         train, valid, test, train_tgt, valid_tgt, test_tgt = None, None, None, None, None, None
         for digit in classes:
             tr, v, te, trt, vt, tet = read_and_split('train/{0}.pkl'.format(digit), digit)
@@ -98,11 +118,21 @@ def load_dataset():
                 test, test_tgt = (Sp.vstack(te), tet) if te is not None and len(tet)>0 else (test, test_tgt)
             else:
                 test, test_tgt = (Sp.vstack([test, Sp.vstack(te)]), test_tgt+tet) if te is not None and len(tet)>0 else (test, test_tgt)
+        global ROWN
+        ROWN = len(train_tgt)+len(valid_tgt)+len(test_tgt)
+        global BATCHN
+        BATCHN = ROWN / BATCH_EPOCH
+        
         return train, valid, test, np.array(train_tgt), np.array(valid_tgt), np.array(test_tgt)
 
     if not isDownload:
         download_save_by_category()
-    classes = range(20)
+    if A_B == 'A':
+        classes = A
+    elif A_B == 'B':
+        classes = B
+    else:
+        classes = range(20)
     return get_classes(classes)
 
 
@@ -161,10 +191,10 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
 # more functions to better separate the code, but it wouldn't make it any
 # easier to read.
 
-def main(num_epochs=500):
+def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None):
     # Load the dataset
     print("Loading data...")
-    X_train, X_val, X_test, y_train, y_val, y_test = load_dataset()
+    X_train, X_val, X_test, y_train, y_val, y_test = load_dataset(A_B)
     X_train, X_val, X_test = X_train.todense(), X_val.todense(), X_test.todense()
     print('#train = {0}, #test = {1}, #valid = {2}'.format(len(y_train), len(y_test), len(y_val)))
     # Prepare Theano variables for inputs and targets
@@ -175,17 +205,19 @@ def main(num_epochs=500):
     print("Building model and compiling functions...")
     network = build_mlp(input_var)
 
-    # Create a loss expression for training, i.e., a scalar objective we want
-    # to minimize (for our multi-class problem, it is the cross-entropy loss):
+    # Create a loss expression for training
     prediction = lasagne.layers.get_output(network)
     loss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
     loss = loss.mean()
     # We could add some weight decay as well here, see lasagne.regularization.
 
-    # Create update expressions for training, i.e., how to modify the
+    # Load parameters
+    if fin_params is not None:
+        lasagne.layers.set_all_param_values(network, cPickle.load(open(fin_params, 'r')))
+    params = lasagne.layers.get_all_params(network, trainable=True)
+     # Create update expressions for training, i.e., how to modify the
     # parameters at each training step. Here, we'll use Stochastic Gradient
     # Descent (SGD) with Nesterov momentum, but Lasagne offers plenty more.
-    params = lasagne.layers.get_all_params(network, trainable=True)
     updates = lasagne.updates.nesterov_momentum(
             loss, params, learning_rate=1e-3, momentum=0.9)
 
@@ -196,7 +228,6 @@ def main(num_epochs=500):
     test_loss = lasagne.objectives.categorical_crossentropy(test_prediction,
                                                             target_var)
     test_loss = test_loss.mean()
-    # As a bonus, also create an expression for the classification accuracy:
     test_acc = T.mean(T.eq(T.argmax(test_prediction, axis=1), target_var),
                       dtype=theano.config.floatX)
 
@@ -254,23 +285,19 @@ def main(num_epochs=500):
     print("  test accuracy:\t\t{:.2f} %".format(
         test_acc / test_batches * 100))
 
-    # Optionally, you could now dump the network weights to a file like this:
-    # np.savez('model.npz', *lasagne.layers.get_all_param_values(network))
-    #
-    # And load them again later on like this:
-    # with np.load('model.npz') as f:
-    #     param_values = [f['arr_%d' % i] for i in range(len(f.files))]
-    # lasagne.layers.set_all_param_values(network, param_values)
+    # dump parameters
+    if fout_params is None:
+        fout_params = 'model_{0}.npz'.format(num_epochs)
+    cPickle.dump(lasagne.layers.get_all_param_values(network), open(fout_params, 'w+'))
 
 
 if __name__ == '__main__':
-    if ('--help' in sys.argv) or ('-h' in sys.argv):
-        print("Trains a neural network on MNIST using Lasagne.")
-        print("Usage: %s [EPOCHS]" % sys.argv[0])
-        print()
-        print("EPOCHS: number of training epochs to perform (default: 500)")
-    else:
-        kwargs = {}
-        if len(sys.argv) > 1:
-            kwargs['num_epochs'] = int(sys.argv[1])
-        main(**kwargs)
+    opts = parse_arg()
+    kwargs = {}
+    if len(sys.argv) > 1:
+        kwargs['num_epochs'] = int(opts.epoch)
+        kwargs['fin_params'] = opts.fin
+        kwargs['fout_params'] = opts.fout
+        kwargs['A_B'] = opts.A_B
+
+    main(**kwargs)

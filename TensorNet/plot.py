@@ -9,7 +9,7 @@ VACC = 'Epoch \d*.*\n.*training loss:\t\t.*\n.*validation loss:\t\t.*\n.*validat
 
 
 def parse_arg():
-    parser = optparse.OptionParser('udage%prog [-i infile]')
+    parser = optparse.OptionParser('usage%prog [-i infile]')
     parser.add_option('-i', dest='fin')
     (options, args) = parser.parse_args()
     return options
