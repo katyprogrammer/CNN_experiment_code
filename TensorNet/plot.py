@@ -1,5 +1,6 @@
 import optparse
 import matplotlib.pyplot as plt
+import pandas as pd
 import re
 
 EPOCH = 'Epoch (\d*).*\n.*training loss:\t\t.*\n.*validation loss:\t\t.*\n.*validation accuracy:\t\t.* %'
@@ -18,19 +19,18 @@ def parse_arg():
 def plot(fin,fout):
     with open(fin, 'r') as f:
         data = f.read()
-    epoch = re.findall(EPOCH, data)
-    tloss = re.findall(TLOSS, data)
-    vloss = re.findall(VLOSS, data)
-    vacc = re.findall(VACC, data)
-    plt.plot(epoch, tloss, marker='.', markersize=1, label='training loss')
-    plt.plot(epoch, vloss, marker='.', markersize=1, label='validation loss')
+    epoch = [float(x) for x in re.findall(EPOCH, data)]
+    tloss = [float(x) for x in re.findall(TLOSS, data)]
+    vloss = [float(x) for x in re.findall(VLOSS, data)]
+    vacc = [float(x) for x in re.findall(VACC, data)]
+    df = pd.DataFrame({'training loss':tloss, 'validation loss':vloss}, index=epoch)
+    df.plot()
     plt.xlabel('epoch')
-    plt.legend()
     plt.savefig('loss_{0}.png'.format(fout))
     plt.clf()
-    plt.plot(epoch, vacc, marker='.', markersize=1, label='validation accuracy')
+    df = pd.DataFrame({'validation accuracy':vacc}, index=epoch)
+    df.plot()
     plt.xlabel('epoch')
-    plt.legend()
     plt.savefig('val_acc_{0}.png'.format(fout))
 
 opts = parse_arg()

@@ -14,6 +14,7 @@ import scipy.sparse as Sp
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import HashingVectorizer, TfidfVectorizer
 from sklearn.decomposition import TruncatedSVD
+from sktensor import dtensor, cp_als
 import theano
 import theano.tensor as T
 import lasagne
@@ -31,7 +32,9 @@ training domain A(src)
 $ python 20newsgroup.py -r A -d A.pkl -e 5000 > A.txt
 training domain B(tgt)
 # load trained params from A.pkl
-python 20newsgroup.py -r B -l A.pkl -d B.pkl -e 5000 > B.txt
+$ python 20newsgroup.py -r B -l A.pkl -d B.pkl -e 5000 > B.txt
+# load low-rank with R rank1 from A.pkl
+$ python 20newsgroup.py -r B -l A.pkl -d B_1.pkl -e 5000 -R 1 > B_1.txt
 
 A.txt, B.txt will contain training information(training error, validation error, validation accuracy)
 $ python plot.py -i A.txt -o A
@@ -44,6 +47,7 @@ def parse_arg():
     parser.add_option('-d', dest='fout')
     parser.add_option('-e', dest='epoch')
     parser.add_option('-r', dest='A_B')
+    parser.add_option('-R', dest='rank')
     (options, args) = parser.parse_args()
     return options
 
@@ -163,7 +167,7 @@ def build_mlp(input_var=None):
 
     # Another 800-unit layer:
     l_hid2 = lasagne.layers.DenseLayer(
-            l_in, num_units=800,
+            l_in, num_units=1000,
             nonlinearity=None)
 
     # Finally, we'll add the fully-connected output layer, of 20 softmax units:
@@ -174,6 +178,22 @@ def build_mlp(input_var=None):
     # Each layer is linked to its incoming layer(s), so we only need to pass
     # the output layer to give access to a network in Lasagne:
     return l_out
+
+# CP low-rank approximate
+def approx_CP_R(value, R):
+    if value.ndim < 2:
+        return value
+    T = dtensor(value)
+    P, fit, itr, exetimes = cp_als(T, R, init='random')
+    Y = None
+    for i in range(R):
+        y = P.lmbda[i]
+        o = None
+        for l in range(T.ndim):
+            o = P.U[l][:,i] if o is None else np.outer(o, P.U[l][:,i])
+        y = y * o
+        Y = y if Y is None else Y+y
+    return Y
 
 # ############################# Batch iterator ###############################
 # This is just a simple helper function iterating over training data in
@@ -199,7 +219,7 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
 # more functions to better separate the code, but it wouldn't make it any
 # easier to read.
 
-def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None):
+def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
     # Load the dataset
     print("Loading data...")
     X_train, X_val, X_test, y_train, y_val, y_test = load_dataset(A_B)
@@ -221,7 +241,13 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None):
 
     # Load parameters
     if fin_params is not None:
-        lasagne.layers.set_all_param_values(network, cPickle.load(open(fin_params, 'r')))
+        A = cPickle.load(open(fin_params, 'r'))
+        if rank is not None:
+            Ap = []
+            for i in range(len(A)):
+                Ap.append(approx_CP_R(A[i], int(rank)))
+            A = Ap
+        lasagne.layers.set_all_param_values(network, A)
     params = lasagne.layers.get_all_params(network, trainable=True)
      # Create update expressions for training, i.e., how to modify the
     # parameters at each training step. Here, we'll use Stochastic Gradient
@@ -307,5 +333,6 @@ if __name__ == '__main__':
         kwargs['fin_params'] = opts.fin
         kwargs['fout_params'] = opts.fout
         kwargs['A_B'] = opts.A_B
+        kwargs['rank'] = opts.rank
 
     main(**kwargs)
