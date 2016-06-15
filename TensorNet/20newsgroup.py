@@ -63,13 +63,8 @@ isDownload = True
 
 def load_dataset(A_B):
     def download_save_by_category():
-        # download 20newsgroups
-        newsgroups = fetch_20newsgroups(subset='all')
-        global ROWN
-        ROWN = len(newsgroups.target)
-        global BATCHN
-        BATCHN = ROWN / BATCH_EPOCH
-        global HashN
+        # train
+        newsgroups = fetch_20newsgroups(subset='train')
         first = True
         TfIdfVec = TfidfVectorizer(sublinear_tf=True, max_df=0.5,
                                  stop_words='english')
@@ -79,10 +74,7 @@ def load_dataset(A_B):
         
         target = newsgroups.target
         print('[LDA] transformed dimension={0}'.format(vectors.shape[1]))
-        # feature hashing
-        # hasher = HashingVectorizer(n_features=HashN)
-        # vectors = hasher.fit_transform(newsgroups.data)
-        # target = newsgroups.target
+        global HashN
         HashN = vectors.shape[1]
 
         if not exists('train'):
@@ -94,30 +86,43 @@ def load_dataset(A_B):
                 if target[j] == i:
                     x.append(vectors[j])
             cPickle.dump(x, open(join('train', '{0}.pkl'.format(i)), 'w+'))
+        # test
+        newsgroups = fetch_20newsgroups(subset='test')
+        vectors = TfIdfVec.transform(newsgroups.data)
+        vectors = lda.transform(vectors)
+        target = newsgroups.target
+        if not exists('test'):
+            os.makedirs('test')
+
+        for i in range(20):
+            x = []
+            for j in range(len(target)):
+                if target[j] == i:
+                    x.append(vectors[j])
+            cPickle.dump(x, open(join('test', '{0}.pkl'.format(i)), 'w+'))
     
-    def read_and_split(filepath, digit, NUM=None, test_ratio=0.2, valid_ratio=0.2):
+    def read_and_split(filepath, digit, NUM=None, Split=True):
         data = cPickle.load(open(filepath, 'r'))
         # instance number to use
         if NUM is not None:
             data = data[:NUM]
-        # split train/test
-        split = int(len(data)*(1-test_ratio))
-        train = data[:split]
-        test = data[split:]
-        train_tgt = [digit for i in range(len(train))]
-        test_tgt = [digit for i in range(len(test))]
+        target = [digit for i in range(len(data))]
+        if not Split:
+            return Sp.csr_matrix(data), target
         # split train/valid
-        split = int(len(train_tgt)*valid_ratio)
-        valid = train[:split]
-        train = train[split:]
-        valid_tgt = train_tgt[:split]
-        train_tgt = train_tgt[split:]
-        return Sp.csr_matrix(train), Sp.csr_matrix(valid), Sp.csr_matrix(test), train_tgt, valid_tgt, test_tgt
+        valid_ratio = 0.2
+        split = int(len(target)*valid_ratio)
+        valid = data[:split]
+        train = data[split:]
+        valid_tgt = target[:split]
+        train_tgt = target[split:]
+        return Sp.csr_matrix(train), Sp.csr_matrix(valid), train_tgt, valid_tgt
 
     def get_classes(classes):        
         train, valid, test, train_tgt, valid_tgt, test_tgt = None, None, None, None, None, None
         for digit in classes:
-            tr, v, te, trt, vt, tet = read_and_split('train/{0}.pkl'.format(digit), digit)
+            tr, v, trt, vt = read_and_split('train/{0}.pkl'.format(digit), digit)
+            te, tet = read_and_split('test/{0}.pkl'.format(digit), digit, Split=False)
             if train is None:
                 train, train_tgt = (Sp.vstack(tr), trt) if tr is not None and len(trt)>0 else (train, train_tgt)
             else:
