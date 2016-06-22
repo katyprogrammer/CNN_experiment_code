@@ -13,7 +13,7 @@ import numpy as np
 import scipy.sparse as Sp
 from sklearn.datasets import fetch_20newsgroups
 from sklearn.feature_extraction.text import HashingVectorizer, TfidfVectorizer
-from sklearn.decomposition import TruncatedSVD
+from sklearn.decomposition import TruncatedSVD, NMF
 from sktensor import dtensor, cp_als
 import theano
 import theano.tensor as T
@@ -60,21 +60,21 @@ BATCH_EPOCH = 20
 ROWN, BATCHN = None, None
 HashN = 200
 isDownload = True
+covDone = True
 
 def load_dataset(A_B):
     def download_save_by_category():
+        global HashN
         # train
         newsgroups = fetch_20newsgroups(subset='train')
         first = True
         TfIdfVec = TfidfVectorizer(sublinear_tf=True, max_df=0.5,
                                  stop_words='english')
         vectors = TfIdfVec.fit_transform(newsgroups.data) # in scipy.sparse.csr_matrix format
-        lda = TruncatedSVD(n_components=HashN) # sparse linear discriminant analysis
-        vectors = lda.fit_transform(vectors, newsgroups.target)
-        
+        dcmp = TruncatedSVD(n_components=HashN) # sparse linear discriminant analysis
+        vectors = dcmp.fit_transform(vectors, newsgroups.target)
         target = newsgroups.target
         print('[LDA] transformed dimension={0}'.format(vectors.shape[1]))
-        global HashN
         HashN = vectors.shape[1]
 
         if not exists('train'):
@@ -89,7 +89,7 @@ def load_dataset(A_B):
         # test
         newsgroups = fetch_20newsgroups(subset='test')
         vectors = TfIdfVec.transform(newsgroups.data)
-        vectors = lda.transform(vectors)
+        vectors = dcmp.transform(vectors)
         target = newsgroups.target
         if not exists('test'):
             os.makedirs('test')
@@ -100,6 +100,20 @@ def load_dataset(A_B):
                 if target[j] == i:
                     x.append(vectors[j])
             cPickle.dump(x, open(join('test', '{0}.pkl'.format(i)), 'w+'))
+    def calcAcov():
+        S, T = [], []
+        for i in A:
+            x = cPickle.load(open(join('train', '{0}.pkl'.format(i)), 'r'))
+            S += x
+        for i in B:
+            x = cPickle.load(open(join('train', '{0}.pkl'.format(i)), 'r'))
+            T += x
+        SE, SU = np.linalg.eig(np.cov(S))
+        TE, TU = np.linalg.eig(np.cov(T))
+        SEsqrt, TEsqrtinv = np.diag(np.sqrt(SE)), np.diag(1.0/np.sqrt(TE))
+        # wrong
+        Acov = SU.transpose() * SEsqrt * TEsqrtinv * TU.transpose()
+        cPickle.dump(open('Acov.pkl', 'w+'))
     
     def read_and_split(filepath, digit, NUM=None, Split=True):
         data = cPickle.load(open(filepath, 'r'))
@@ -118,7 +132,7 @@ def load_dataset(A_B):
         train_tgt = target[split:]
         return Sp.csr_matrix(train), Sp.csr_matrix(valid), train_tgt, valid_tgt
 
-    def get_classes(classes):        
+    def get_classes(classes):
         train, valid, test, train_tgt, valid_tgt, test_tgt = None, None, None, None, None, None
         for digit in classes:
             tr, v, trt, vt = read_and_split('train/{0}.pkl'.format(digit), digit)
@@ -139,16 +153,15 @@ def load_dataset(A_B):
         ROWN = len(train_tgt)+len(valid_tgt)+len(test_tgt)
         global BATCHN
         BATCHN = ROWN / BATCH_EPOCH
-        
         return train, valid, test, np.array(train_tgt), np.array(valid_tgt), np.array(test_tgt)
 
     if not isDownload:
         download_save_by_category()
-    if A_B == 'A':
-        classes = A
-    elif A_B == 'B':
-        classes = B
-    else:
+    if not covDone:
+        print('calculating transform matrix for covariance')
+        calcAcov()
+    classes = A if A_B == 'A' else B
+    if A_B is None:
         classes = range(20)
     return get_classes(classes)
 
@@ -200,6 +213,50 @@ def approx_CP_R(value, R):
         Y = y if Y is None else Y+y
     return Y
 
+def load_largest_rank(A, O, rank):
+    # tensorization
+    AA, BB = [], []
+    row, column = -1, -1
+    for i in range(len(A)):
+        print(A[i].shape)
+        if A[i].ndim == 1:
+            BB.append(A[i])
+        else:
+            AA.append(A[i])
+            row, column = max(row, len(A[i])), max(column, len(A[i][0]))
+    AA, BB = np.array(AA), np.array(BB)
+    for i in range(len(AA)):
+        ac = len(AA[i][0])
+        while row > len(AA[i]):
+            AA[i] = np.append(AA[i], np.zeros((1,ac)), axis=0)
+        if column > ac:
+            TAA = []
+            for j in range(row):
+                TAA += [np.append(AA[i][j], np.zeros(column-ac))]
+            AA[i] = np.array(TAA)
+    for i in range(len(BB)):
+        ac = len(BB[i])
+        if column > ac:
+            BB[i] = np.append(BB[i], np.zeros(column-ac))
+    AA = approx_CP_R(np.array(AA), int(rank))
+    BB = approx_CP_R(BB, int(rank))
+    # de-tensorization
+    bi, ai = 0, 0
+    for i in range(len(O)):
+        if np.array(A[i]).ndim == 1:
+            A[i] = BB[bi][:len(O[i])]
+            bi += 1
+        else:
+            TAA = []
+            A[i] = AA[ai][:O[i].shape[0]]
+            for j in range(A[i].shape[0]):
+                TAA += [A[i][j][:O[i].shape[1]]]
+            ai += 1
+            A[i] = np.array(TAA)
+    return A
+def load_smallest_rank(A, O, rank):
+    pass
+
 # ############################# Batch iterator ###############################
 # This is just a simple helper function iterating over training data in
 # mini-batches of a particular size, optionally in random order. It assumes
@@ -228,7 +285,7 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
     # Load the dataset
     print("Loading data...")
     X_train, X_val, X_test, y_train, y_val, y_test = load_dataset(A_B)
-    X_train, X_val, X_test = X_train.todense(), X_val.todense(), X_test.todense()
+    X_train, X_val, X_test = X_train.todense(), X_val.todense(), X_test.todense()    
     print('#train = {0}, #test = {1}, #valid = {2}'.format(len(y_train), len(y_test), len(y_val)))
     # Prepare Theano variables for inputs and targets
     input_var = T.matrix('inputs')
@@ -247,11 +304,10 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
     # Load parameters
     if fin_params is not None:
         A = cPickle.load(open(fin_params, 'r'))
+        O = lasagne.layers.get_all_param_values(network)
         if rank is not None:
-            Ap = []
-            for i in range(len(A)):
-                Ap.append(approx_CP_R(A[i], int(rank)))
-            A = Ap
+            # try largest 1-rank approximate
+            A = load_largest_rank(A, O, rank)
         lasagne.layers.set_all_param_values(network, A)
     params = lasagne.layers.get_all_params(network, trainable=True)
      # Create update expressions for training, i.e., how to modify the
