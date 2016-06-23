@@ -100,20 +100,6 @@ def load_dataset(A_B):
                 if target[j] == i:
                     x.append(vectors[j])
             cPickle.dump(x, open(join('test', '{0}.pkl'.format(i)), 'w+'))
-    def calcAcov():
-        S, T = [], []
-        for i in A:
-            x = cPickle.load(open(join('train', '{0}.pkl'.format(i)), 'r'))
-            S += x
-        for i in B:
-            x = cPickle.load(open(join('train', '{0}.pkl'.format(i)), 'r'))
-            T += x
-        SE, SU = np.linalg.eig(np.cov(S))
-        TE, TU = np.linalg.eig(np.cov(T))
-        SEsqrt, TEsqrtinv = np.diag(np.sqrt(SE)), np.diag(1.0/np.sqrt(TE))
-        # wrong
-        Acov = SU.transpose() * SEsqrt * TEsqrtinv * TU.transpose()
-        cPickle.dump(open('Acov.pkl', 'w+'))
     
     def read_and_split(filepath, digit, NUM=None, Split=True):
         data = cPickle.load(open(filepath, 'r'))
@@ -255,7 +241,8 @@ def load_largest_rank(A, O, rank):
             A[i] = np.array(TAA)
     return A
 def load_smallest_rank(A, O, rank):
-    pass
+    TA = load_largest_rank(A, O, rank)
+    return np.array(A)-np.array(TA)+np.array(O)
 
 # ############################# Batch iterator ###############################
 # This is just a simple helper function iterating over training data in
@@ -307,7 +294,9 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
         O = lasagne.layers.get_all_param_values(network)
         if rank is not None:
             # try largest 1-rank approximate
-            A = load_largest_rank(A, O, rank)
+            # A = load_largest_rank(A, O, rank)
+            # try largest 1-rank approximate
+            A = load_smallest_rank(A, O, rank)
         lasagne.layers.set_all_param_values(network, A)
     params = lasagne.layers.get_all_params(network, trainable=True)
      # Create update expressions for training, i.e., how to modify the
