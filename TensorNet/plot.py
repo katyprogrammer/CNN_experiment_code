@@ -11,12 +11,14 @@ VACC = 'Epoch \d*.*\n.*training loss:\t\t.*\n.*validation loss:\t\t.*\n.*validat
 FINAL_LOSS = 'Final results:\n.*test loss:\t\t\t(.*)\n.*test accuracy:\t\t.* %'
 FINAL_ACC = 'Final results:\n.*test loss:\t\t\t.*\n.*test accuracy:\t\t(.*) %'
 BASE = None
+REV = None
 
 def parse_arg():
-    parser = optparse.OptionParser('usage%prog [-i infile] [-o outfile] [-A all]')
+    parser = optparse.OptionParser('usage%prog [-i infile] [-o outfile] [-A all] [-r A->B or B->A]')
     parser.add_option('-i', dest='fin')
     parser.add_option('-o', dest='fout')
     parser.add_option('-A', dest='All', action='store_true', default=False)
+    parser.add_option('-r', dest='rev', action='store_true', default=False)
     (options, args) = parser.parse_args()
     return options
 
@@ -43,7 +45,10 @@ def plot(fin,fout,title,isB=False):
     if isB:
         df = pd.DataFrame({'validation accuracy':vacc}, index=epoch)
     else:
-        df = pd.DataFrame({'validation accuracy':vacc, 'B':Base[0]}, index=epoch)
+        if not REV:
+            df = pd.DataFrame({'validation accuracy':vacc, 'B':Base[0]}, index=epoch)
+        else:
+            df = pd.DataFrame({'validation accuracy':vacc, 'A':Base[0]}, index=epoch)
     df.plot()
     plt.title(title)
     plt.plot([len(epoch)+1],[facc],marker='o',markersize=10)
@@ -57,8 +62,10 @@ def plot(fin,fout,title,isB=False):
 
 def plotData(df, title, a, b):
     df.plot()
-    # plt.axhline(y=a, label='A', linestyle='--', color='g')
-    plt.axhline(y=b, label='B', linestyle='-.', color='r')
+    if REV:
+        plt.axhline(y=a, label='A', linestyle='-.', color='r')
+    else:
+        plt.axhline(y=b, label='B', linestyle='-.', color='r')
     plt.xlabel('# Rank1 tensor transferred')
     plt.legend()
     plt.title(title)
@@ -67,8 +74,12 @@ def plotData(df, title, a, b):
 def plotAll():
     files = glob.glob('*.txt')
     A, B = None, None
-    A = plot('A.txt', 'A', 'A', isB=True)
-    B = plot('B.txt', 'B', 'B', isB=True)
+    if not REV:
+        A = plot('A.txt', 'A', 'A', isB=True)
+        B = plot('B.txt', 'B', 'B', isB=True)
+    else:
+        B = plot('B.txt', 'B', 'B', isB=True)
+        A = plot('A.txt', 'A', 'A', isB=True)
     FL, FA, TL, VL, VA, R = [], [], [], [], [], []
     for f in files:
         fname = f.split('.')[0]
@@ -76,7 +87,10 @@ def plotAll():
         if len(ABR) == 1:
             continue
         else:
-            fl, fa, tl, vl, va = plot(f, fname, 'B with {0} Rank1 from A '.format(ABR[1]))
+            if not REV:
+                fl, fa, tl, vl, va = plot(f, fname, 'B with {0} Rank1 from A '.format(ABR[1]))
+            else:
+                fl, fa, tl, vl, va = plot(f, fname, 'A with {0} Rank1 from B '.format(ABR[1]))
             FL += [fl]
             FA += [fa]
             TL += [tl]
@@ -92,4 +106,5 @@ opts = parse_arg()
 if opts.All is False:
     plot(opts.fin, opts.fout)
 else:
+    REV = opts.rev
     plotAll()

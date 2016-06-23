@@ -168,15 +168,24 @@ def build_mlp(input_var=None):
     #         l_in, tt_input_shape=[HashN], tt_output_shape=[HashN],
     #         tt_ranks=[1, 1],
     #         nonlinearity=lasagne.nonlinearities.tanh)
-
-    # Another 800-unit layer:
+    # wide and shallow
+    # l_hid2 = lasagne.layers.DenseLayer(
+    #         l_in, num_units=1000,
+    #         nonlinearity=None)
+    # thin and deep
+    l_hid1 = lasagne.layers.DenseLayer(
+            l_in, num_units=200,
+            nonlinearity=None)
     l_hid2 = lasagne.layers.DenseLayer(
-            l_in, num_units=1000,
+            l_hid1, num_units=200,
+            nonlinearity=None)
+    l_hid3 = lasagne.layers.DenseLayer(
+            l_hid2, num_units=200,
             nonlinearity=None)
 
     # Finally, we'll add the fully-connected output layer, of 20 softmax units:
     l_out = lasagne.layers.DenseLayer(
-            l_hid2, num_units=20,
+            l_hid3, num_units=20,
             nonlinearity=lasagne.nonlinearities.softmax)
 
     # Each layer is linked to its incoming layer(s), so we only need to pass
@@ -204,13 +213,11 @@ def load_largest_rank(A, O, rank):
     AA, BB = [], []
     row, column = -1, -1
     for i in range(len(A)):
-        print(A[i].shape)
         if A[i].ndim == 1:
             BB.append(A[i])
         else:
             AA.append(A[i])
             row, column = max(row, len(A[i])), max(column, len(A[i][0]))
-    AA, BB = np.array(AA), np.array(BB)
     for i in range(len(AA)):
         ac = len(AA[i][0])
         while row > len(AA[i]):
@@ -224,8 +231,9 @@ def load_largest_rank(A, O, rank):
         ac = len(BB[i])
         if column > ac:
             BB[i] = np.append(BB[i], np.zeros(column-ac))
-    AA = approx_CP_R(np.array(AA), int(rank))
-    BB = approx_CP_R(BB, int(rank))
+    TAA, TBB = np.array(AA), np.array(BB)
+    AA = approx_CP_R(TAA, int(rank)).reshape(TAA.shape)
+    BB = approx_CP_R(TBB, int(rank)).reshape(TBB.shape)
     # de-tensorization
     bi, ai = 0, 0
     for i in range(len(O)):
@@ -234,9 +242,10 @@ def load_largest_rank(A, O, rank):
             bi += 1
         else:
             TAA = []
-            A[i] = AA[ai][:O[i].shape[0]]
+            A[i] = AA[ai]
+            A[i] = A[i][:O[i].shape[0]]
             for j in range(A[i].shape[0]):
-                TAA += [A[i][j][:O[i].shape[1]]]
+                TAA += [A[i][j][:(O[i].shape[1])]]
             ai += 1
             A[i] = np.array(TAA)
     return A
@@ -294,9 +303,9 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
         O = lasagne.layers.get_all_param_values(network)
         if rank is not None:
             # try largest 1-rank approximate
-            # A = load_largest_rank(A, O, rank)
+            A = load_largest_rank(A, O, rank)
             # try largest 1-rank approximate
-            A = load_smallest_rank(A, O, rank)
+            # A = load_smallest_rank(A, O, rank)
         lasagne.layers.set_all_param_values(network, A)
     params = lasagne.layers.get_all_params(network, trainable=True)
      # Create update expressions for training, i.e., how to modify the
