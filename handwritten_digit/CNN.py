@@ -38,7 +38,7 @@ A = np.array(range(5))
 # tgt
 B = 5+A
 
-isDownload = False
+isDownload = True
 BATCHN = 500
 
 def parse_arg():
@@ -177,8 +177,13 @@ def load_largest_rank(A, O, rank):
         if A[i].ndim == 1:
             BB.append(A[i])
         else:
-            AA.append(A[i])
-            row, column = max(row, len(A[i])), max(column, len(A[i][0]))
+            c = 1
+            for j in range(1,A[i].ndim):
+                c*=A[i].shape[j]
+            T = A[i].reshape((A[i].shape[0],c))
+            AA.append(T)
+            row, column = max(row, len(T)), max(column, len(T[1]))
+    print('lenAA={}, lenBB={}'.format(len(AA), len(BB)))
     for i in range(len(AA)):
         ac = len(AA[i][0])
         while row > len(AA[i]):
@@ -202,13 +207,16 @@ def load_largest_rank(A, O, rank):
             A[i] = BB[bi][:len(O[i])]
             bi += 1
         else:
+            c = 1
+            for j in range(1,O[i].ndim):
+                c*=O[i].shape[j]
             TAA = []
             A[i] = AA[ai]
             A[i] = A[i][:O[i].shape[0]]
             for j in range(A[i].shape[0]):
-                TAA += [A[i][j][:(O[i].shape[1])]]
+                TAA += [A[i][j][:c]]
             ai += 1
-            A[i] = np.array(TAA)
+            A[i] = np.array(TAA).reshape((O[i].shape))
     return A
 def load_smallest_rank(A, O, rank):
     TA = load_largest_rank(A, O, rank)
