@@ -170,53 +170,106 @@ def approx_CP_R(value, R):
         Y = y if Y is None else Y+y
     return Y
 def load_largest_rank(A, O, rank):
-    # tensorization
-    AA, BB = [], []
-    row, column = -1, -1
-    for i in range(len(A)):
-        if A[i].ndim == 1:
-            BB.append(A[i])
-        else:
-            c = 1
-            for j in range(1,A[i].ndim):
-                c*=A[i].shape[j]
-            T = A[i].reshape((A[i].shape[0],c))
-            AA.append(T)
-            row, column = max(row, len(T)), max(column, len(T[1]))
-    print('lenAA={}, lenBB={}'.format(len(AA), len(BB)))
-    for i in range(len(AA)):
-        ac = len(AA[i][0])
-        while row > len(AA[i]):
-            AA[i] = np.append(AA[i], np.zeros((1,ac)), axis=0)
-        if column > ac:
-            TAA = []
-            for j in range(row):
-                TAA += [np.append(AA[i][j], np.zeros(column-ac))]
-            AA[i] = np.array(TAA)
-    for i in range(len(BB)):
-        ac = len(BB[i])
-        if column > ac:
-            BB[i] = np.append(BB[i], np.zeros(column-ac))
-    TAA, TBB = np.array(AA), np.array(BB)
+    def all_layers(A, O):
+        AA, BB = [], []
+        row, column = -1, -1
+        for i in range(len(A)):
+            if A[i].ndim == 1:
+                BB.append(A[i])
+            else:
+                c = 1
+                for j in range(1,A[i].ndim):
+                    c*=A[i].shape[j]
+                T = A[i].reshape((A[i].shape[0],c))
+                AA.append(T)
+                row, column = max(row, len(T)), max(column, len(T[1]))
+        for i in range(len(AA)):
+            ac = len(AA[i][0])
+            while row > len(AA[i]):
+                AA[i] = np.append(AA[i], np.zeros((1,ac)), axis=0)
+            if column > ac:
+                TAA = []
+                for j in range(row):
+                    TAA += [np.append(AA[i][j], np.zeros(column-ac))]
+                AA[i] = np.array(TAA)
+        for i in range(len(BB)):
+            ac = len(BB[i])
+            if column > ac:
+                BB[i] = np.append(BB[i], np.zeros(column-ac))
+        return np.array(AA), np.array(BB)
+    def only_conv_layers(A, O):
+        AA = []
+        row, column = -1, -1
+        for i in range(len(A)):
+            if A[i].ndim > 2:
+                c = 1
+                for j in range(1,A[i].ndim):
+                    c*=A[i].shape[j]
+                T = A[i].reshape((A[i].shape[0],c))
+                AA.append(T)
+                row, column = max(row, len(T)), max(column, len(T[1]))
+                nxt = True
+        for i in range(len(AA)):
+            ac = len(AA[i][0])
+            while row > len(AA[i]):
+                AA[i] = np.append(AA[i], np.zeros((1,ac)), axis=0)
+            if column > ac:
+                TAA = []
+                for j in range(row):
+                    TAA += [np.append(AA[i][j], np.zeros(column-ac))]
+                AA[i] = np.array(TAA)
+        return np.array(AA)
+    def de_all_layers(A, O, AA, BB):
+        bi, ai = 0, 0
+        for i in range(len(O)):
+            if np.array(A[i]).ndim == 1:
+                A[i] = BB[bi][:len(O[i])]
+                bi += 1
+            else:
+                c = 1
+                for j in range(1,O[i].ndim):
+                    c*=O[i].shape[j]
+                TAA = []
+                A[i] = AA[ai]
+                A[i] = A[i][:O[i].shape[0]]
+                for j in range(A[i].shape[0]):
+                    TAA += [A[i][j][:c]]
+                ai += 1
+                A[i] = np.array(TAA).reshape((O[i].shape))
+        return A
+    def de_only_conv_layers(A, O, AA):
+        ai = 0
+        for i in range(len(O)):
+            if np.array(A[i]).ndim <= 2:
+                A[i] = O[i]
+            else:
+                c = 1
+                for j in range(1,O[i].ndim):
+                    c*=O[i].shape[j]
+                TAA = []
+                A[i] = AA[ai]
+                A[i] = A[i][:O[i].shape[0]]
+                for j in range(A[i].shape[0]):
+                    TAA += [A[i][j][:c]]
+                ai += 1
+                A[i] = np.array(TAA).reshape((O[i].shape))
+        return A
+    ### tensorization ###
+    # all layers
+    # TAA, TBB = all_layers(A, O)
+    # print('decomposing tensor W of shape {}...'.format(TAA.shape))
+    # print('decomposing tensor B of shape {}...'.format(TBB.shape))
+    # AA = approx_CP_R(TAA, int(rank)).reshape(TAA.shape)
+    # BB = approx_CP_R(TBB, int(rank)).reshape(TBB.shape)
+    # only conv layers
+    TAA = only_conv_layers(A, O)
+    print('decomposing tensor W of shape {}...'.format(TAA.shape))
     AA = approx_CP_R(TAA, int(rank)).reshape(TAA.shape)
-    BB = approx_CP_R(TBB, int(rank)).reshape(TBB.shape)
-    # de-tensorization
-    bi, ai = 0, 0
-    for i in range(len(O)):
-        if np.array(A[i]).ndim == 1:
-            A[i] = BB[bi][:len(O[i])]
-            bi += 1
-        else:
-            c = 1
-            for j in range(1,O[i].ndim):
-                c*=O[i].shape[j]
-            TAA = []
-            A[i] = AA[ai]
-            A[i] = A[i][:O[i].shape[0]]
-            for j in range(A[i].shape[0]):
-                TAA += [A[i][j][:c]]
-            ai += 1
-            A[i] = np.array(TAA).reshape((O[i].shape))
+    ### de-tensorization ###
+    # all layers
+    # A = de_all_layers(A, O, AA, BB)
+    # only onv layers
+    A = de_only_conv_layers(A, O, AA)
     return A
 def load_smallest_rank(A, O, rank):
     TA = load_largest_rank(A, O, rank)
