@@ -1,0 +1,89 @@
+Couldn't import dot_parser, loading of dot files will not be possible.
+loading data...
+#train = 23525, #test = 4861, #valid = 5879
+building model and compiling functions...
+lenAA=4, lenBB=4
+starting training...
+Epoch 1 of 20 took 144.803s
+  training loss:		2.450770
+  validation loss:		2.321399
+  validation accuracy:		0.00 %
+Epoch 2 of 20 took 137.105s
+  training loss:		2.288920
+  validation loss:		2.242728
+  validation accuracy:		21.64 %
+Epoch 3 of 20 took 137.930s
+  training loss:		2.211420
+  validation loss:		2.142098
+  validation accuracy:		21.51 %
+Epoch 4 of 20 took 137.479s
+  training loss:		2.073712
+  validation loss:		1.875769
+  validation accuracy:		21.51 %
+Epoch 5 of 20 took 147.350s
+  training loss:		1.797840
+  validation loss:		1.581787
+  validation accuracy:		54.69 %
+Epoch 6 of 20 took 133.812s
+  training loss:		1.646158
+  validation loss:		1.464509
+  validation accuracy:		66.15 %
+Epoch 7 of 20 took 134.001s
+  training loss:		1.521235
+  validation loss:		1.291633
+  validation accuracy:		70.62 %
+Epoch 8 of 20 took 133.098s
+  training loss:		1.356275
+  validation loss:		1.055306
+  validation accuracy:		77.29 %
+Epoch 9 of 20 took 136.683s
+  training loss:		1.152314
+  validation loss:		0.829010
+  validation accuracy:		81.00 %
+Epoch 10 of 20 took 134.172s
+  training loss:		0.970592
+  validation loss:		0.652750
+  validation accuracy:		84.31 %
+Epoch 11 of 20 took 133.575s
+  training loss:		0.822761
+  validation loss:		0.534425
+  validation accuracy:		86.18 %
+Epoch 12 of 20 took 99.216s
+  training loss:		0.720858
+  validation loss:		0.451058
+  validation accuracy:		87.76 %
+Epoch 13 of 20 took 104.042s
+  training loss:		0.641132
+  validation loss:		0.393643
+  validation accuracy:		88.98 %
+Epoch 14 of 20 took 103.224s
+  training loss:		0.579704
+  validation loss:		0.351015
+  validation accuracy:		90.18 %
+Epoch 15 of 20 took 103.196s
+  training loss:		0.532497
+  validation loss:		0.316029
+  validation accuracy:		90.84 %
+Epoch 16 of 20 took 90.941s
+  training loss:		0.490176
+  validation loss:		0.288248
+  validation accuracy:		91.64 %
+Epoch 17 of 20 took 59.744s
+  training loss:		0.458541
+  validation loss:		0.267665
+  validation accuracy:		92.09 %
+Epoch 18 of 20 took 59.485s
+  training loss:		0.432363
+  validation loss:		0.251118
+  validation accuracy:		92.56 %
+Epoch 19 of 20 took 59.655s
+  training loss:		0.411301
+  validation loss:		0.233330
+  validation accuracy:		93.16 %
+Epoch 20 of 20 took 59.499s
+  training loss:		0.393882
+  validation loss:		0.224954
+  validation accuracy:		93.31 %
+Final results:
+  test loss:			0.223120
+  test accuracy:		93.09 %
