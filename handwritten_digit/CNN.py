@@ -40,6 +40,7 @@ B = 5+A
 
 isDownload = True
 BATCHN = 500
+LAYERS = ['conv_1','maxpool_1','conv_2','maxpool_2','dropout_1','dense_1','dropout_2','dense_output']
 
 def parse_arg():
     parser = optparse.OptionParser('usage%prog [-l load parameterf from] [-d dump parameter to] [-e epoch] [-r src or tgt]')
@@ -109,35 +110,35 @@ def load_dataset(A_B):
 # A function that takes a Theano variable representing the input and returns
 # the output layer of a neural network model built in Lasagne.
 def build_mlp(input_var=None):
-    l_in = lasagne.layers.InputLayer(shape=(None, 1, 28, 28), input_var=input_var)
+    l_in = lasagne.layers.InputLayer(name='input', shape=(None, 1, 28, 28), input_var=input_var)
     conv1 = lasagne.layers.Conv2DLayer(
-        l_in, num_filters=32, filter_size=(5, 5),
+        l_in, name='conv_1', num_filters=32, filter_size=(5, 5),
         nonlinearity=lasagne.nonlinearities.rectify,
         W=lasagne.init.GlorotUniform()
         )
     maxpool1 = lasagne.layers.MaxPool2DLayer(
-        conv1, pool_size=(2, 2)
+        conv1, name='maxpool_1', pool_size=(2, 2)
     )
     conv2 = lasagne.layers.Conv2DLayer(
-        maxpool1, num_filters=32,
+        maxpool1, name='conv_2', num_filters=32,
         filter_size=(5, 5),
         nonlinearity=lasagne.nonlinearities.rectify
     )
     maxpool2 = lasagne.layers.MaxPool2DLayer(
-        conv2, pool_size=(2, 2)
+        conv2, name='maxpool_2', pool_size=(2, 2)
     )
     dropout1 = lasagne.layers.DropoutLayer(
-        maxpool2, p=0.5
+        maxpool2, name='dropout_1', p=0.5
     )
     dense = lasagne.layers.DenseLayer(
-        dropout1, num_units=256,
+        dropout1, name='dense_1', num_units=256,
         nonlinearity=lasagne.nonlinearities.rectify
     )
     dropout2 = lasagne.layers.DropoutLayer(
-        dense, p=0.5
+        dense, name='dropout_2', p=0.5
     )
     l_out = lasagne.layers.DenseLayer(
-        dropout2, num_units=10,
+        dropout2, name='dense_output', num_units=10,
         nonlinearity=lasagne.nonlinearities.softmax,
     )
     return l_out
@@ -170,19 +171,26 @@ def approx_CP_R(value, R):
         Y = y if Y is None else Y+y
     return Y
 def load_largest_rank(A, O, rank):
-    def all_layers(A, O):
+    def all_layers(A, O, TARGET):
         AA, BB = [], []
         row, column = -1, -1
         for i in range(len(A)):
-            if A[i].ndim == 1:
-                BB.append(A[i])
-            else:
+            if A[i].name not in TARGET:
+                continue
+            if 'dense' in A[i].name or 'conv' in A[i].name:
+                w, b = A[i].get_params()
+                w, b = w.get_value(), b.get_value()
+                print('w={},b={}'.format(w.shape, b.shape))
+                BB.append(b)
                 c = 1
-                for j in range(1,A[i].ndim):
-                    c*=A[i].shape[j]
-                T = A[i].reshape((A[i].shape[0],c))
+                for j in range(1,w.ndim):
+                    c*=w.shape[j]
+                T = w.reshape((w.shape[0],c))
                 AA.append(T)
                 row, column = max(row, len(T)), max(column, len(T[1]))
+            else:
+                print('layers other than "dense", "conv" layers, donnot have params')
+            
         for i in range(len(AA)):
             ac = len(AA[i][0])
             while row > len(AA[i]):
@@ -197,79 +205,42 @@ def load_largest_rank(A, O, rank):
             if column > ac:
                 BB[i] = np.append(BB[i], np.zeros(column-ac))
         return np.array(AA), np.array(BB)
-    def only_conv_layers(A, O):
-        AA = []
-        row, column = -1, -1
-        for i in range(len(A)):
-            if A[i].ndim > 2:
-                c = 1
-                for j in range(1,A[i].ndim):
-                    c*=A[i].shape[j]
-                T = A[i].reshape((A[i].shape[0],c))
-                AA.append(T)
-                row, column = max(row, len(T)), max(column, len(T[1]))
-                nxt = True
-        for i in range(len(AA)):
-            ac = len(AA[i][0])
-            while row > len(AA[i]):
-                AA[i] = np.append(AA[i], np.zeros((1,ac)), axis=0)
-            if column > ac:
-                TAA = []
-                for j in range(row):
-                    TAA += [np.append(AA[i][j], np.zeros(column-ac))]
-                AA[i] = np.array(TAA)
-        return np.array(AA)
-    def de_all_layers(A, O, AA, BB):
-        bi, ai = 0, 0
-        for i in range(len(O)):
-            if np.array(A[i]).ndim == 1:
-                A[i] = BB[bi][:len(O[i])]
-                bi += 1
-            else:
-                c = 1
-                for j in range(1,O[i].ndim):
-                    c*=O[i].shape[j]
-                TAA = []
-                A[i] = AA[ai]
-                A[i] = A[i][:O[i].shape[0]]
-                for j in range(A[i].shape[0]):
-                    TAA += [A[i][j][:c]]
-                ai += 1
-                A[i] = np.array(TAA).reshape((O[i].shape))
-        return A
-    def de_only_conv_layers(A, O, AA):
+    def de_all_layers(O, AA, BB, TARGET):
+        A = []
         ai = 0
         for i in range(len(O)):
-            if np.array(A[i]).ndim <= 2:
-                A[i] = O[i]
+            if O[i].name not in TARGET:
+                x = O[i].get_params()
+                if x != []:
+                    w, b = x
+                    A.append(w.get_value())
+                    A.append(b.get_value())
             else:
+                w, b = O[i].get_params()
+                w, b = w.get_value(), b.get_value()
                 c = 1
-                for j in range(1,O[i].ndim):
-                    c*=O[i].shape[j]
+                for j in range(1,w.ndim):
+                    c*=w.shape[j]
                 TAA = []
-                A[i] = AA[ai]
-                A[i] = A[i][:O[i].shape[0]]
-                for j in range(A[i].shape[0]):
-                    TAA += [A[i][j][:c]]
+                X = AA[ai]
+                X = X[:w.shape[0]]
+                for j in range(X.shape[0]):
+                    TAA += [X[j][:c]]
+                A.append(np.array(TAA).reshape((w.shape)))
+                A.append(BB[ai][:len(b)])
                 ai += 1
-                A[i] = np.array(TAA).reshape((O[i].shape))
         return A
     ### tensorization ###
-    # all layers
-    # TAA, TBB = all_layers(A, O)
-    # print('decomposing tensor W of shape {}...'.format(TAA.shape))
-    # print('decomposing tensor B of shape {}...'.format(TBB.shape))
-    # AA = approx_CP_R(TAA, int(rank)).reshape(TAA.shape)
-    # BB = approx_CP_R(TBB, int(rank)).reshape(TBB.shape)
-    # only conv layers
-    TAA = only_conv_layers(A, O)
+    TARGET = ['conv_1','conv_2']
+    TAA, TBB = all_layers(A, O, TARGET)
     print('decomposing tensor W of shape {}...'.format(TAA.shape))
+    print('decomposing tensor B of shape {}...'.format(TBB.shape))
     AA = approx_CP_R(TAA, int(rank)).reshape(TAA.shape)
+    BB = approx_CP_R(TBB, int(rank)).reshape(TBB.shape)
     ### de-tensorization ###
     # all layers
-    # A = de_all_layers(A, O, AA, BB)
-    # only onv layers
-    A = de_only_conv_layers(A, O, AA)
+    A = de_all_layers(O, AA, BB, TARGET)
+    print(len(A))
     return A
 def load_smallest_rank(A, O, rank):
     TA = load_largest_rank(A, O, rank)
@@ -298,7 +269,7 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
     # load parameters
     if fin_params is not None:
         A = cPickle.load(open(fin_params, 'r'))
-        O = lasagne.layers.get_all_param_values(network)
+        O = lasagne.layers.get_all_layers(network)
         if rank is not None:
             # try largest 1-rank approximate
             A = load_largest_rank(A, O, rank)
@@ -367,9 +338,7 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
     print('  test accuracy:\t\t{:.2f} %'.format(test_acc/test_batches*100))
 
     # dump parameters
-    if fout_params is None:
-        fout_params = 'model_{}.npz'.format(num_epochs)
-    cPickle.dump(lasagne.layers.get_all_param_values(network), open(fout_params, 'w+'))
+    cPickle.dump(lasagne.layers.get_all_layers(network), open(fout_params, 'w+'))
 
 if __name__ == '__main__':
     opts = parse_arg()
