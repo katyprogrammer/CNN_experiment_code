@@ -14,23 +14,26 @@ import theano.tensor as T
 import lasagne
 
 '''
-# tuning good hyperparameter using all category
+### tuning good hyperparameter using all category ###
 training all:
 $ python CNN.py -e 20 > all.txt
 
-training domain A(src)
-# training with 20 epoch
-# save trained params to A.pkl
+### training domain A(src) ###
+# training with 20 epoch, save trained params to A.pkl
 $ python CNN.py -r A -d A.pkl -e 20 > A.txt
-training domain B(tgt)
-# load trained params from A.pkl
+# training domain B(tgt), load trained params from A.pkl
 $ python CNN.py -r B -l A.pkl -d B.pkl -e 20 > B.txt
 # load low-rank with R rank1 from A.pkl
 $ python CNN.py -r B -l A.pkl -d B_1.pkl -e 20 -R 1 > B_1.txt
 
-A.txt, B.txt will contain training information(training error, validation error, validation accuracy)
+### A.txt, B.txt will contain training information(training error, validation error, validation accuracy)
 $ python plot.py -i A.txt -o A
 $ python plot.py -i B.txt -o B
+
+### using GPU
+# on all 1 epoch:
+# cpu => 220s, gpu => 26s
+$ THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python CNN.py ...
 '''
 
 # src
