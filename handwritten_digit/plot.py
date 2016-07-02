@@ -104,7 +104,7 @@ def plotAll():
     plotData(pd.DataFrame({'validation accuracy at epoch=1':VA}, index=R).sort_index(), 'validation accuracy at epoch=1', A[4], B[4])
 opts = parse_arg()
 if opts.All is False:
-    plot(opts.fin, opts.fout)
+    plot(opts.fin, opts.fout, opts.fin[:-3], isB=True)
 else:
     REV = opts.rev
     plotAll()
