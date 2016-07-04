@@ -216,9 +216,11 @@ def load_largest_rank(A, O, rank):
                 x = O[i].get_params()
                 if x != []:
                     w, b = x
-                    A.append(w.get_value())
-                    A.append(b.get_value())
+                    A.append(w.get_value().astype(np.float32))
+                    A.append(b.get_value().astype(np.float32))
             else:
+                if O[i].get_params() == []: # maxpool, dropout donnot have params
+                    continue
                 w, b = O[i].get_params()
                 w, b = w.get_value(), b.get_value()
                 c = 1
@@ -229,12 +231,15 @@ def load_largest_rank(A, O, rank):
                 X = X[:w.shape[0]]
                 for j in range(X.shape[0]):
                     TAA += [X[j][:c]]
-                A.append(np.array(TAA).reshape((w.shape)))
-                A.append(BB[ai][:len(b)])
+                A.append(np.array(TAA).reshape((w.shape)).astype(np.float32))
+                A.append(BB[ai][:len(b)].astype(np.float32))
                 ai += 1
         return A
     ### tensorization ###
+    # conv only
     TARGET = ['conv_1','conv_2']
+    # all
+    # TARGET = ['conv_1','maxpool_1','conv_2','maxpool_2','dropout_1','dense_1','dropout_2','dense_output']
     TAA, TBB = all_layers(A, O, TARGET)
     print('decomposing tensor W of shape {}...'.format(TAA.shape))
     print('decomposing tensor B of shape {}...'.format(TBB.shape))
@@ -243,7 +248,6 @@ def load_largest_rank(A, O, rank):
     ### de-tensorization ###
     # all layers
     A = de_all_layers(O, AA, BB, TARGET)
-    print(len(A))
     return A
 def load_smallest_rank(A, O, rank):
     TA = load_largest_rank(A, O, rank)
