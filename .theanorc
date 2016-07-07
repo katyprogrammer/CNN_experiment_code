@@ -1,0 +1,5 @@
+[global]
+floatX=float32
+device=gpu
+[cuda]
+root=/usr/local/cuda-7.5

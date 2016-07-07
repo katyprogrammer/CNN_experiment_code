@@ -24,16 +24,17 @@ from ttlayer import TTLayer
 '''
 # tuning good hyperparameter using all category
 training all:
-$ python 20newsgroup.py -e 10000 > all.txt
+$ python 20newsgroup.py -e 5000 > all.txt
 
 training domain A(src)
+# training with 5000 epoch
 # save trained params to A.pkl
-$ python 20newsgroup.py -r A -d A.pkl -e 10000 > A.txt
+$ python 20newsgroup.py -r A -d A.pkl -e 5000 > A.txt
 training domain B(tgt)
 # load trained params from A.pkl
-$ python 20newsgroup.py -r B -l A.pkl -d B.pkl -e 10000 > B.txt
+$ python 20newsgroup.py -r B -l A.pkl -d B.pkl -e 5000 > B.txt
 # load low-rank with R rank1 from A.pkl
-$ python 20newsgroup.py -r B -l A.pkl -d B_1.pkl -e 10000 -R 1 > B_1.txt
+$ python 20newsgroup.py -r B -l A.pkl -d B_1.pkl -e 5000 -R 1 > B_1.txt
 
 A.txt, B.txt will contain training information(training error, validation error, validation accuracy)
 $ python plot.py -i A.txt -o A
@@ -60,13 +61,6 @@ ROWN, BATCHN = None, None
 HashN = 200
 isDownload = True
 covDone = True
-#TARGET  = ['dense_1']
-#TARGET  = ['dense_2']
-#TARGET  = ['dense_3']
-#TARGET  = ['dense_1', 'dense_2']
-#TARGET  = ['dense_1', 'dense_3']
-#TARGET  = ['dense_2', 'dense_3']
-TARGET  = ['dense_1', 'dense_2', 'dense_3']
 
 def load_dataset(A_B):
     def download_save_by_category():
@@ -163,20 +157,39 @@ def load_dataset(A_B):
 # the output layer of a neural network model built in Lasagne.
 
 def build_mlp(input_var=None):
+    # Input layer, specifying the expected input shape of the network
+    # (unspecified batchsize, 1 channel, 1 row, HashN columns) and
+    # linking it to the given Theano variable `input_var`, if any:
     l_in = lasagne.layers.InputLayer(shape=(None, HashN),
                                      input_var=input_var)
+
+    # Build a TT-layer
+    # l_hid1 = TTLayer(
+    #         l_in, tt_input_shape=[HashN], tt_output_shape=[HashN],
+    #         tt_ranks=[1, 1],
+    #         nonlinearity=lasagne.nonlinearities.tanh)
+    # wide and shallow
+    # l_hid2 = lasagne.layers.DenseLayer(
+    #         l_in, num_units=1000,
+    #         nonlinearity=None)
+    # thin and deep
     l_hid1 = lasagne.layers.DenseLayer(
-            l_in, name='dense_1', num_units=200,
+            l_in, num_units=200,
             nonlinearity=None)
     l_hid2 = lasagne.layers.DenseLayer(
-            l_hid1, name='dense_2', num_units=200,
+            l_hid1, num_units=200,
             nonlinearity=None)
     l_hid3 = lasagne.layers.DenseLayer(
-            l_hid2, name='dense_3', num_units=200,
+            l_hid2, num_units=200,
             nonlinearity=None)
+
+    # Finally, we'll add the fully-connected output layer, of 20 softmax units:
     l_out = lasagne.layers.DenseLayer(
             l_hid3, num_units=20,
             nonlinearity=lasagne.nonlinearities.softmax)
+
+    # Each layer is linked to its incoming layer(s), so we only need to pass
+    # the output layer to give access to a network in Lasagne:
     return l_out
 
 # CP low-rank approximate
@@ -196,82 +209,59 @@ def approx_CP_R(value, R):
     return Y
 
 def load_largest_rank(A, O, rank):
-    def all_layers(A, O, TARGET):
-        AA, BB = [], []
-        row, column = -1, -1
-        for i in range(len(A)):
-            if A[i].name not in TARGET:
-                continue
-            if 'dense' in A[i].name or 'conv' in A[i].name:
-                w, b = A[i].get_params()
-                w, b = w.get_value(), b.get_value()
-                print('w={},b={}'.format(w.shape, b.shape))
-                BB.append(b)
-                c = 1
-                for j in range(1,w.ndim):
-                    c*=w.shape[j]
-                T = w.reshape((w.shape[0],c))
-                AA.append(T)
-                row, column = max(row, len(T)), max(column, len(T[1]))
-            else:
-                print('layers other than "dense", "conv" layers, donnot have params')
-            
-        for i in range(len(AA)):
-            ac = len(AA[i][0])
-            while row > len(AA[i]):
-                AA[i] = np.append(AA[i], np.zeros((1,ac)), axis=0)
-            if column > ac:
-                TAA = []
-                for j in range(row):
-                    TAA += [np.append(AA[i][j], np.zeros(column-ac))]
-                AA[i] = np.array(TAA)
-        for i in range(len(BB)):
-            ac = len(BB[i])
-            if column > ac:
-                BB[i] = np.append(BB[i], np.zeros(column-ac))
-        return np.array(AA), np.array(BB)
-    def de_all_layers(O, AA, BB, TARGET):
-        A = []
-        ai = 0
-        for i in range(len(O)):
-            if O[i].name not in TARGET:
-                x = O[i].get_params()
-                if x != []:
-                    w, b = x
-                    A.append(w.get_value().astype(np.float32))
-                    A.append(b.get_value().astype(np.float32))
-            else:
-                if O[i].get_params() == []: # maxpool, dropout donnot have params
-                    continue
-                w, b = O[i].get_params()
-                w, b = w.get_value(), b.get_value()
-                c = 1
-                for j in range(1,w.ndim):
-                    c*=w.shape[j]
-                TAA = []
-                X = AA[ai]
-                X = X[:w.shape[0]]
-                for j in range(X.shape[0]):
-                    TAA += [X[j][:c]]
-                A.append(np.array(TAA).reshape((w.shape)).astype(np.float32))
-                A.append(BB[ai][:len(b)].astype(np.float32))
-                ai += 1
-        return A
-    ### tensorization ###
-    TAA, TBB = all_layers(A, O, TARGET)
-    print('decomposing tensor W of shape {}...'.format(TAA.shape))
-    print('decomposing tensor B of shape {}...'.format(TBB.shape))
+    # tensorization
+    AA, BB = [], []
+    row, column = -1, -1
+    for i in range(len(A)):
+        if A[i].ndim == 1:
+            BB.append(A[i])
+        else:
+            AA.append(A[i])
+            row, column = max(row, len(A[i])), max(column, len(A[i][0]))
+    for i in range(len(AA)):
+        ac = len(AA[i][0])
+        while row > len(AA[i]):
+            AA[i] = np.append(AA[i], np.zeros((1,ac)), axis=0)
+        if column > ac:
+            TAA = []
+            for j in range(row):
+                TAA += [np.append(AA[i][j], np.zeros(column-ac))]
+            AA[i] = np.array(TAA)
+    for i in range(len(BB)):
+        ac = len(BB[i])
+        if column > ac:
+            BB[i] = np.append(BB[i], np.zeros(column-ac))
+    TAA, TBB = np.array(AA), np.array(BB)
     AA = approx_CP_R(TAA, int(rank)).reshape(TAA.shape)
     BB = approx_CP_R(TBB, int(rank)).reshape(TBB.shape)
-    ### de-tensorization ###
-    # all layers
-    A = de_all_layers(O, AA, BB, TARGET)
+    # de-tensorization
+    bi, ai = 0, 0
+    for i in range(len(O)):
+        if np.array(A[i]).ndim == 1:
+            A[i] = BB[bi][:len(O[i])]
+            bi += 1
+        else:
+            TAA = []
+            A[i] = AA[ai]
+            A[i] = A[i][:O[i].shape[0]]
+            for j in range(A[i].shape[0]):
+                TAA += [A[i][j][:(O[i].shape[1])]]
+            ai += 1
+            A[i] = np.array(TAA)
     return A
 def load_smallest_rank(A, O, rank):
     TA = load_largest_rank(A, O, rank)
     return np.array(A)-np.array(TA)+np.array(O)
 
-# ############################# Batch iterator #################
+# ############################# Batch iterator ###############################
+# This is just a simple helper function iterating over training data in
+# mini-batches of a particular size, optionally in random order. It assumes
+# data is available as numpy arrays. For big datasets, you could load numpy
+# arrays as memory-mapped files (np.load(..., mmap_mode='r')), or write your
+# own custom data iteration function. For small datasets, you can also copy
+# them to GPU at once for slightly improved performance. This would involve
+# several changes in the main program, though, and is not demonstrated here.
+
 def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
     assert len(inputs) == len(targets)
     if shuffle:
@@ -282,24 +272,35 @@ def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
         yield inputs[excerpt], targets[excerpt]
 
 
-# ############################## Main program ##################
+# ############################## Main program ################################
+# Everything else will be handled in our main program now. We could pull out
+# more functions to better separate the code, but it wouldn't make it any
+# easier to read.
+
 def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
+    # Load the dataset
     print("Loading data...")
     X_train, X_val, X_test, y_train, y_val, y_test = load_dataset(A_B)
     X_train, X_val, X_test = X_train.todense(), X_val.todense(), X_test.todense()    
     print('#train = {0}, #test = {1}, #valid = {2}'.format(len(y_train), len(y_test), len(y_val)))
     # Prepare Theano variables for inputs and targets
     input_var = T.matrix('inputs')
-    target_var = T.ivector('targets')
+    target_var = T.lvector('targets')
 
     # Create neural network model.
     print("Building model and compiling functions...")
     network = build_mlp(input_var)
 
-    # load parameters
+    # Create a loss expression for training
+    prediction = lasagne.layers.get_output(network)
+    loss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
+    loss = loss.mean()
+    # We could add some weight decay as well here, see lasagne.regularization.
+
+    # Load parameters
     if fin_params is not None:
         A = cPickle.load(open(fin_params, 'r'))
-        O = lasagne.layers.get_all_layers(network)
+        O = lasagne.layers.get_all_param_values(network)
         if rank is not None:
             # try largest 1-rank approximate
             A = load_largest_rank(A, O, rank)
@@ -307,23 +308,34 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
             # A = load_smallest_rank(A, O, rank)
         lasagne.layers.set_all_param_values(network, A)
     params = lasagne.layers.get_all_params(network, trainable=True)
-    # Create a loss expression for training
-    prediction = lasagne.layers.get_output(network)
-    loss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
-    loss = loss.mean()
+     # Create update expressions for training, i.e., how to modify the
+    # parameters at each training step. Here, we'll use Stochastic Gradient
+    # Descent (SGD) with Nesterov momentum, but Lasagne offers plenty more.
     updates = lasagne.updates.nesterov_momentum(
             loss, params, learning_rate=1e-3, momentum=0.9)
-    
+
+    # Create a loss expression for validation/testing. The crucial difference
+    # here is that we do a deterministic forward pass through the network,
+    # disabling dropout layers.
     test_prediction = lasagne.layers.get_output(network, deterministic=True)
     test_loss = lasagne.objectives.categorical_crossentropy(test_prediction,
                                                             target_var)
     test_loss = test_loss.mean()
-    test_acc = T.mean(T.eq(T.argmax(test_prediction, axis=1), target_var), dtype=theano.config.floatX)
-    train_fn = theano.function([input_var, target_var], loss, updates=updates, allow_input_downcast=True)
-    val_fn = theano.function([input_var, target_var], [test_loss, test_acc], allow_input_downcast=True)
+    test_acc = T.mean(T.eq(T.argmax(test_prediction, axis=1), target_var),
+                      dtype=theano.config.floatX)
 
+    # Compile a function performing a training step on a mini-batch (by giving
+    # the updates dictionary) and returning the corresponding training loss:
+    train_fn = theano.function([input_var, target_var], loss, updates=updates)
+
+    # Compile a second function computing the validation loss and accuracy:
+    val_fn = theano.function([input_var, target_var], [test_loss, test_acc])
+
+    # Finally, launch the training loop.
     print("Starting training...")
+    # We iterate over epochs:
     for epoch in range(num_epochs):
+        # In each epoch, we do a full pass over the training data:
         train_err = 0
         train_batches = 0
         start_time = time.time()
@@ -332,6 +344,7 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
             train_err += train_fn(inputs, targets)
             train_batches += 1
 
+        # And a full pass over the validation data:
         val_err = 0
         val_acc = 0
         val_batches = 0
@@ -342,6 +355,7 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
             val_acc += acc
             val_batches += 1
 
+        # Then we print the results for this epoch:
         print("Epoch {} of {} took {:.3f}s".format(
             epoch + 1, num_epochs, time.time() - start_time))
         print("  training loss:\t\t{:.6f}".format(train_err / train_batches))
@@ -365,7 +379,9 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
         test_acc / test_batches * 100))
 
     # dump parameters
-    cPickle.dump(lasagne.layers.get_all_layers(network), open(fout_params, 'w+'))
+    if fout_params is None:
+        fout_params = 'model_{0}.npz'.format(num_epochs)
+    cPickle.dump(lasagne.layers.get_all_param_values(network), open(fout_params, 'w+'))
 
 
 if __name__ == '__main__':

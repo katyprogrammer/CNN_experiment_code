@@ -1,8 +1,6 @@
 import sys
 import subprocess
 import multiprocessing as mp
-from Queue import Queue
-from threading import Thread
 
 def A():
     subprocess.call('python CNN.py -r A -d A.pkl -e 100 > A.txt', shell=True)
