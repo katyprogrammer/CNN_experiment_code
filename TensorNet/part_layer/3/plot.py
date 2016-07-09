@@ -103,6 +103,7 @@ def plotAll():
     plotData(pd.DataFrame({'training loss at epoch=1':TL}, index=R).sort_index(), 'training loss at epoch=1', A[2], B[2])
     plotData(pd.DataFrame({'validation loss at epoch=1':VL}, index=R).sort_index(), 'validation loss at epoch=1', A[3], B[3])
     plotData(pd.DataFrame({'validation accuracy at epoch=1':VA}, index=R).sort_index(), 'validation accuracy at epoch=1', A[4], B[4])
+    TA['index']=R
     TA.to_csv('test_acc.csv')
 opts = parse_arg()
 if opts.All is False:
