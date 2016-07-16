@@ -60,13 +60,7 @@ ROWN, BATCHN = None, None
 HashN = 200
 isDownload = True
 covDone = True
-#TARGET  = ['dense_1']
-#TARGET  = ['dense_2']
-#TARGET  = ['dense_3']
-#TARGET  = ['dense_1', 'dense_2']
-#TARGET  = ['dense_1', 'dense_3']
-#TARGET  = ['dense_2', 'dense_3']
-TARGET  = ['dense_1', 'dense_2', 'dense_3']
+TARGET  = ['dense_1', 'dense_2', 'dense_3', 'dense_4', 'dense_5']
 
 def load_dataset(A_B):
     def download_save_by_category():
@@ -158,24 +152,27 @@ def load_dataset(A_B):
     return get_classes(classes)
 
 
-# ##################### Build the neural network model #######################
-# A function that takes a Theano variable representing the input and returns
-# the output layer of a neural network model built in Lasagne.
-
+# ##################### Build the neural network model #####################
 def build_mlp(input_var=None):
     l_in = lasagne.layers.InputLayer(shape=(None, HashN),
                                      input_var=input_var)
     l_hid1 = lasagne.layers.DenseLayer(
-            l_in, name='dense_1', num_units=200,
+            l_in, name='dense_1', num_units=150,
             nonlinearity=None)
     l_hid2 = lasagne.layers.DenseLayer(
-            l_hid1, name='dense_2', num_units=200,
+            l_hid1, name='dense_2', num_units=100,
             nonlinearity=None)
     l_hid3 = lasagne.layers.DenseLayer(
-            l_hid2, name='dense_3', num_units=200,
+            l_hid2, name='dense_3', num_units=50,
+            nonlinearity=None)
+    l_hid4 = lasagne.layers.DenseLayer(
+            l_hid3, name='dense_4', num_units=50,
+            nonlinearity=None)
+    l_hid5 = lasagne.layers.DenseLayer(
+            l_hid4, name='dense_5', num_units=50,
             nonlinearity=None)
     l_out = lasagne.layers.DenseLayer(
-            l_hid3, num_units=20,
+            l_hid5, num_units=20,
             nonlinearity=lasagne.nonlinearities.softmax)
     return l_out
 

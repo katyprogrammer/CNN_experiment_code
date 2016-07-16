@@ -7,9 +7,9 @@ def A():
 def B():
     subprocess.call('python 20newsgroup.py -r B -d B.pkl -e 10000 > B.txt', shell=True)
 
-runA, runB = mp.Process(target=A), mp.Process(target=B)
-#runA.start()
-#runA.join()
+# runA, runB = mp.Process(target=A), mp.Process(target=B)
+# runA.start()
+# runA.join()
 # runB.start()
 # runB.join()
 
@@ -22,8 +22,6 @@ runs = []
 tn = 0
 # all layers
 R = [1,5,10,50,100,200]
-R = [10]
-
 tn = 0
 for r in R:
     AB = mp.Process(target=runR, args=(r,))
