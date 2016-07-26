@@ -12,6 +12,7 @@ from sktensor import dtensor, cp_als
 import theano
 import theano.tensor as T
 import lasagne
+import random
 
 '''
 ### tuning good hyperparameter using all category ###
@@ -20,7 +21,7 @@ $ python CNN.py -e 20 > all.txt
 
 ### training domain A(src) ###
 # training with 20 epoch, save trained params to A.pkl
-$ python CNN.py -r A -d A.pkl -e 20 > A.txt
+$ python CNN.py -r A -d A.pkl -e 20 -s small -t 1 2 3 4 5 > A.txt
 # training domain B(tgt), load trained params from A.pkl
 $ python CNN.py -r B -l A.pkl -d B.pkl -e 20 > B.txt
 # load low-rank with R rank1 from A.pkl
@@ -33,7 +34,7 @@ $ python plot.py -i B.txt -o B
 ### using GPU
 # on all 1 epoch:
 # cpu => 220s, gpu => 26s
-$ THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python CNN.py ...
+$ THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python CNN.py python CNN.py -r B -l A.pkl -d B_1.pkl -e 100 -R 1 > B_1.txt
 '''
 
 # src
@@ -41,23 +42,28 @@ A = np.array(range(5))
 # tgt
 B = 5+A
 
-isDownload = True
+isDownload = False
 BATCHN = 500
 LAYERS = ['conv_1','maxpool_1','conv_2','maxpool_2','dropout_1','dense_1','dropout_2','dense_output']
 
 def parse_arg():
-    parser = optparse.OptionParser('usage%prog [-l load parameterf from] [-d dump parameter to] [-e epoch] [-r src or tgt]')
+    parser = optparse.OptionParser('usage%prog [-l load parameterf from] [-d dump parameter to] [-e epoch] [-r src or tgt] [-small small or large rank] [-t 1 2 3 4]')
     parser.add_option('-l', dest='fin')
     parser.add_option('-d', dest='fout')
     parser.add_option('-e', dest='epoch')
     parser.add_option('-r', dest='A_B')
     parser.add_option('-R', dest='rank')
+    parser.add_option('-s', dest='small')
+    parser.add_option('-t', dest='transfer')
     (options, args) = parser.parse_args()
     return options
 
 def load_dataset(A_B):
-    def download_save_by_category():
+    def download__by_category():
+        # mnist = fetch_mldata('MNIST original')
         mnist = fetch_mldata('MNIST original')
+        # mnist.data = random.sample(mnist.data, 1000)
+        # mnist.target = random.sample(mnist.target, 1000)
         # mnist.data (70000, 784), mnist.target (70000, 1)
         trainX, trainY = mnist.data[:-10000], mnist.target[:-10000]
         testX, testY = mnist.data[-10000:], mnist.target[-10000:]
@@ -104,7 +110,7 @@ def load_dataset(A_B):
         return train, valid, test, train_tgt, valid_tgt, test_tgt
 
     if not isDownload:
-        download_save_by_category()
+        download__by_category()
     classes = A if A_B == 'A' else B
     if A_B is None:
         classes = range(10)
@@ -193,7 +199,7 @@ def load_largest_rank(A, O, rank):
                 row, column = max(row, len(T)), max(column, len(T[1]))
             else:
                 print('layers other than "dense", "conv" layers, donnot have params')
-            
+
         for i in range(len(AA)):
             ac = len(AA[i][0])
             while row > len(AA[i]):
@@ -237,9 +243,11 @@ def load_largest_rank(A, O, rank):
         return A
     ### tensorization ###
     # conv only
-    TARGET = ['conv_1','conv_2']
+    # TARGET = ['conv_1','conv_2']
     # all
     # TARGET = ['conv_1','maxpool_1','conv_2','maxpool_2','dropout_1','dense_1','dropout_2','dense_output']
+    # all
+    TARGET = transfer
     TAA, TBB = all_layers(A, O, TARGET)
     print('decomposing tensor W of shape {}...'.format(TAA.shape))
     print('decomposing tensor B of shape {}...'.format(TBB.shape))
@@ -253,14 +261,16 @@ def load_smallest_rank(A, O, rank):
     TA = load_largest_rank(A, O, rank)
     return np.array(A)-np.array(TA)+np.array(O)
 
-def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
+def main(num_epochs=100,fin_params=None,fout_params=None,A_B=None, rank=None, small=None, transfer=None):
+    print transfer
     def debug_theano_var(var, outf):
         if not exists('debug'):
             os.makedirs('debug')
         theano.printing.pydotprint(var, outfile=join('debug', outf))
-    
+
     ### load dataset ###
     print('loading data...')
+    print transfer
     X_train, X_val, X_test, y_train, y_val, y_test = load_dataset(A_B)
     X_train, X_val, X_test = X_train.reshape(-1,1,28,28)/np.float32(256), X_val.reshape(-1,1,28,28)/np.float32(256), X_test.reshape(-1,1,28,28)/np.float32(256)
     print('#train = {0}, #test = {1}, #valid = {2}'.format(len(y_train), len(y_test), len(y_val)))
@@ -279,9 +289,11 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
         O = lasagne.layers.get_all_layers(network)
         if rank is not None:
             # try largest 1-rank approximate
-            A = load_largest_rank(A, O, rank)
-            # try largest 1-rank approximate
-            # A = load_smallest_rank(A, O, rank)
+            if small == 'large':
+                A = load_largest_rank(A, O, rank)
+            # try smallest 1-rank approximate
+            else:
+                A = load_smallest_rank(A, O, rank)
         lasagne.layers.set_all_param_values(network, A)
     params = lasagne.layers.get_all_params(network, trainable=True)
 
@@ -345,7 +357,9 @@ def main(num_epochs=500,fin_params=None,fout_params=None,A_B=None, rank=None):
     print('  test accuracy:\t\t{:.2f} %'.format(test_acc/test_batches*100))
 
     # dump parameters
-    cPickle.dump(lasagne.layers.get_all_layers(network), open(fout_params, 'w+'))
+    # set an output directory according to the parameters
+    output_directory = str(num_epochs) + "_" + fout_params + "_" + A_B + "_" + str(rank) + "_" + small + "_" + "_".join(transfer)
+    cPickle.dump(lasagne.layers.get_all_layers(network), open(output_directory + "/" + fout_params, 'w+'))
 
 if __name__ == '__main__':
     opts = parse_arg()
@@ -356,5 +370,7 @@ if __name__ == '__main__':
         kwargs['fout_params'] = opts.fout
         kwargs['A_B'] = opts.A_B
         kwargs['rank'] = opts.rank
+        kwargs['small'] = opts.small
+        kwargs['transfer'] = sys.argv[sys.argv.index("-t")+1:]
 
     main(**kwargs)
